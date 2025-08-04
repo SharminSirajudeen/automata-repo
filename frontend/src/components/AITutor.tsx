@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Loader2, Brain, Lightbulb, MessageCircle, Code, BookOpen } from 'lucide-react';
+import { Loader2, Brain, Lightbulb, MessageCircle, Code, BookOpen, Target } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Problem, Automaton, ValidationResult, Solution } from '../types/automata';
 
@@ -27,6 +27,9 @@ export const AITutor: React.FC<AITutorProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [solutionExplanation, setSolutionExplanation] = useState<any>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [guidedMode, setGuidedMode] = useState(false);
+  const [currentGuidedStep, setCurrentGuidedStep] = useState<string>('');
+  const [isGettingGuidedStep, setIsGettingGuidedStep] = useState(false);
 
   useEffect(() => {
     checkAIStatus();
@@ -102,6 +105,26 @@ export const AITutor: React.FC<AITutorProps> = ({
       });
     } finally {
       setIsExplaining(false);
+    }
+  };
+
+  const getGuidedStep = async () => {
+    if (!aiStatus.available) return;
+
+    setIsGettingGuidedStep(true);
+    try {
+      const response = await apiService.getGuidedStep(problem.id, {
+        problem_description: problem.description,
+        user_automaton: automaton,
+        test_results: validationResult?.test_results || [],
+        mistakes: validationResult?.mistakes || [],
+      });
+      setCurrentGuidedStep(response.guided_step);
+    } catch (error) {
+      console.error('Failed to get guided step:', error);
+      setCurrentGuidedStep('Try adding your first state by clicking on the canvas.');
+    } finally {
+      setIsGettingGuidedStep(false);
     }
   };
 
@@ -315,6 +338,33 @@ export const AITutor: React.FC<AITutorProps> = ({
 
         <div className="flex flex-wrap gap-2">
           <Button
+            onClick={() => setGuidedMode(!guidedMode)}
+            variant={guidedMode ? "default" : "outline"}
+            size="sm"
+            className={guidedMode ? "bg-gradient-to-r from-green-500 to-blue-500 text-white" : "border-green-500 text-green-600 hover:bg-green-50"}
+          >
+            <Target className="w-4 h-4 mr-1" />
+            {guidedMode ? "Exit Guided Mode" : "Guided Mode"}
+          </Button>
+          
+          {guidedMode && (
+            <Button
+              onClick={getGuidedStep}
+              disabled={!aiStatus.available || isGettingGuidedStep}
+              size="sm"
+              variant="outline"
+              className="border-green-500 text-green-600 hover:bg-green-50"
+            >
+              {isGettingGuidedStep ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              ) : (
+                <Lightbulb className="w-4 h-4 mr-1" />
+              )}
+              Next Step
+            </Button>
+          )}
+          
+          <Button
             onClick={getAIGuidance}
             disabled={!aiStatus.available || isLoadingHint}
             size="sm"
@@ -363,6 +413,18 @@ export const AITutor: React.FC<AITutorProps> = ({
             Built-in Hint
           </Button>
         </div>
+
+        {guidedMode && currentGuidedStep && (
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm flex items-center gap-1">
+              <Lightbulb className="w-4 h-4 text-green-500" />
+              Guided Step
+            </h4>
+            <div className="bg-green-50 p-3 rounded-lg text-sm border-l-4 border-green-500">
+              🎯 {currentGuidedStep}
+            </div>
+          </div>
+        )}
 
         {!aiStatus.available && (
           <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">

@@ -115,6 +115,10 @@ export const ProblemView: React.FC<ProblemViewProps> = ({ problem, onBack }) => 
                 isSimulating={isSimulating}
                 simulationPath={simulationPath}
                 currentSimulationStep={currentSimulationStep}
+                showInteractiveOverlay={false}
+                stepExplanations={{}}
+                onStateHover={(stateId) => console.log('State hovered:', stateId)}
+                onTransitionHover={(index) => console.log('Transition hovered:', index)}
               />
             </CardContent>
           </Card>

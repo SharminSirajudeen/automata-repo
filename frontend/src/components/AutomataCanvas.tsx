@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Trash2, Play, Square, RotateCcw } from 'lucide-react';
+import { InteractiveOverlay } from './InteractiveOverlay';
 
 interface AutomataCanvasProps {
   automaton: Automaton;
@@ -12,6 +13,10 @@ interface AutomataCanvasProps {
   isSimulating?: boolean;
   simulationPath?: string[];
   currentSimulationStep?: number;
+  showInteractiveOverlay?: boolean;
+  stepExplanations?: { [key: string]: string };
+  onStateHover?: (stateId: string) => void;
+  onTransitionHover?: (transitionIndex: number) => void;
 }
 
 export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
@@ -21,6 +26,10 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
   isSimulating = false,
   simulationPath = [],
   currentSimulationStep = 0,
+  showInteractiveOverlay = false,
+  stepExplanations = {},
+  onStateHover,
+  onTransitionHover,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
@@ -30,6 +39,11 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
   const [newSymbol, setNewSymbol] = useState('');
   const [showSymbolInput, setShowSymbolInput] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<{ from: string; to: string } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [draggedState, setDraggedState] = useState<string | null>(null);
+  const [editingTransition, setEditingTransition] = useState<number | null>(null);
+  const [editSymbol, setEditSymbol] = useState('');
 
   const STATE_RADIUS = 30;
   const CANVAS_WIDTH = 800;
@@ -149,6 +163,8 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
   }, [drawCanvas]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isDragging) return;
+    
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -171,21 +187,32 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
     } else if (clickedState) {
       setSelectedState(clickedState.id);
       setSelectedTransition(null);
+      setEditingTransition(null);
     } else {
       const clickedTransition = automaton.transitions.findIndex(transition => {
         const fromState = automaton.states.find(s => s.id === transition.from_state);
         const toState = automaton.states.find(s => s.id === transition.to_state);
         if (!fromState || !toState) return false;
 
-        const midX = (fromState.x + toState.x) / 2;
-        const midY = (fromState.y + toState.y) / 2;
-        const distance = Math.sqrt((x - midX) ** 2 + (y - midY) ** 2);
-        return distance <= 15;
+        const dx = toState.x - fromState.x;
+        const dy = toState.y - fromState.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        
+        for (let t = 0.2; t <= 0.8; t += 0.1) {
+          const checkX = fromState.x + dx * t;
+          const checkY = fromState.y + dy * t;
+          const distance = Math.sqrt((x - checkX) ** 2 + (y - checkY) ** 2);
+          if (distance <= 25) return true;
+        }
+        
+        return false;
       });
 
       if (clickedTransition !== -1) {
         setSelectedTransition(clickedTransition);
         setSelectedState(null);
+        setEditingTransition(clickedTransition);
+        setEditSymbol(automaton.transitions[clickedTransition].symbol);
       } else {
         const newStateId = `q${automaton.states.length}`;
         const newState: State = {
@@ -204,6 +231,7 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
 
         setSelectedState(newStateId);
         setSelectedTransition(null);
+        setEditingTransition(null);
       }
     }
   };
@@ -288,6 +316,23 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
     setNewSymbol('');
     setShowSymbolInput(false);
     setPendingTransition(null);
+  };
+
+  const updateTransitionSymbol = () => {
+    if (editingTransition === null || !editSymbol.trim()) return;
+
+    onAutomatonChange({
+      ...automaton,
+      transitions: automaton.transitions.map((transition, index) =>
+        index === editingTransition
+          ? { ...transition, symbol: editSymbol.trim() }
+          : transition
+      ),
+    });
+
+    setEditingTransition(null);
+    setEditSymbol('');
+    setSelectedTransition(null);
   };
 
   const clearCanvas = () => {
@@ -378,12 +423,80 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
         </div>
       )}
 
-      <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
+      {editingTransition !== null && (
+        <div className="flex gap-2 items-center p-3 bg-yellow-50 rounded-lg">
+          <span className="text-sm font-medium">Edit transition symbol:</span>
+          <Input
+            value={editSymbol}
+            onChange={(e) => setEditSymbol(e.target.value)}
+            placeholder="Enter new symbol"
+            className="w-40"
+            onKeyPress={(e) => e.key === 'Enter' && updateTransitionSymbol()}
+            autoFocus
+          />
+          <Button onClick={updateTransitionSymbol} size="sm">Update</Button>
+          <Button onClick={() => { setEditingTransition(null); setEditSymbol(''); setSelectedTransition(null); }} variant="outline" size="sm">Cancel</Button>
+        </div>
+      )}
+
+      <div className="border-2 border-gray-300 rounded-lg overflow-hidden relative">
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           onClick={handleCanvasClick}
+          onMouseDown={(e) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const clickedState = automaton.states.find(state => {
+              const distance = Math.sqrt((x - state.x) ** 2 + (y - state.y) ** 2);
+              return distance <= STATE_RADIUS;
+            });
+            
+            if (clickedState) {
+              setIsDragging(true);
+              setDragStart({ x, y });
+              setDraggedState(clickedState.id);
+              e.preventDefault();
+            }
+          }}
+          onMouseMove={(e) => {
+            if (!isDragging || !draggedState || !dragStart) return;
+            
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const newX = Math.max(STATE_RADIUS, Math.min(CANVAS_WIDTH - STATE_RADIUS, x));
+            const newY = Math.max(STATE_RADIUS, Math.min(CANVAS_HEIGHT - STATE_RADIUS, y));
+            
+            onAutomatonChange({
+              ...automaton,
+              states: automaton.states.map(state =>
+                state.id === draggedState
+                  ? { ...state, x: newX, y: newY }
+                  : state
+              ),
+            });
+            
+            e.preventDefault();
+          }}
+          onMouseUp={() => {
+            setIsDragging(false);
+            setDragStart(null);
+            setDraggedState(null);
+          }}
+          onMouseLeave={() => {
+            setIsDragging(false);
+            setDragStart(null);
+            setDraggedState(null);
+          }}
           onDoubleClick={(e) => {
             const canvas = canvasRef.current;
             if (!canvas) return;
@@ -398,6 +511,18 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
           }}
           className="cursor-pointer bg-gray-50"
         />
+        {showInteractiveOverlay && (
+          <InteractiveOverlay
+            states={automaton.states}
+            transitions={automaton.transitions}
+            canvasWidth={CANVAS_WIDTH}
+            canvasHeight={CANVAS_HEIGHT}
+            stateRadius={STATE_RADIUS}
+            stepExplanations={stepExplanations}
+            onStateHover={onStateHover}
+            onTransitionHover={onTransitionHover}
+          />
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -408,10 +533,11 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
 
       <div className="text-sm text-gray-600 space-y-1">
         <p>• Click on empty space to create a new state</p>
-        <p>• Click on a state to select it, then use buttons to modify</p>
+        <p>• Click and drag states to move them around</p>
         <p>• Double-click a state to rename it</p>
         <p>• Select a state and click "Add Transition" to create transitions</p>
-        <p>• Click on transitions to select and delete them</p>
+        <p>• Click on transition arrows to edit their symbols</p>
+        <p>• Use Delete button to remove selected states or transitions</p>
       </div>
     </div>
   );
