@@ -64,29 +64,45 @@ npm install
 npm run dev
 ```
 
-### Ollama Setup (for AI features)
+### AI Setup
+
+1. Install Ollama:
 ```bash
-# Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
+```
 
-# Pull a mathematical model (example)
+2. Pull the specialized models:
+```bash
+# For automaton generation and formal definitions
+ollama pull codellama:34b
+
+# For educational explanations and tutoring
+ollama pull deepseek-coder:33b
+
+# Optional: Keep the lightweight model for basic features
 ollama pull llama3.1:8b
+```
 
-# Start Ollama service
+3. Start Ollama service:
+```bash
 ollama serve
 ```
 
-## API Endpoints
+The backend automatically orchestrates between models based on task type. The system works with any combination of available models and provides fallbacks when models are unavailable.
 
-### Problems
+### API Endpoints
+
+#### Core Endpoints
 - `GET /problems` - List all available problems
 - `GET /problems/{id}` - Get specific problem details
 - `POST /problems/{id}/validate` - Validate automaton solution
 - `GET /problems/{id}/hint` - Get built-in hints
 
-### AI Features
-- `POST /problems/{id}/ai-hint` - Get personalized AI guidance
-- `GET /ai/status` - Check AI service availability
+#### AI-Powered Endpoints
+- `POST /problems/{id}/ai-hint` - Get personalized guidance (deepseek-coder:33b)
+- `POST /problems/{id}/generate-solution` - Generate complete automaton solution (codellama:34b)
+- `POST /problems/{id}/explain-solution` - Get detailed explanation of user's solution (deepseek-coder:33b)
+- `GET /ai/status` - Check AI service availability and model status
 
 ## Problem Types
 
@@ -101,14 +117,30 @@ ollama serve
 - **Context-Free Grammars**: Pushdown automata construction
 - **Turing Machines**: Basic Turing machine simulation
 
-## AI Integration
+## 🤖 Multi-Model AI Features
 
-The platform integrates with Ollama to provide intelligent tutoring:
+The platform uses specialized AI models for different educational tasks:
 
-1. **Real-time Guidance**: As students build automata, the AI provides contextual hints
-2. **Error Analysis**: AI analyzes incorrect solutions and explains mistakes
-3. **Step-by-step Teaching**: Progressive guidance through complex problems
-4. **Adaptive Learning**: AI adjusts difficulty based on student performance
+### 🧠 **codellama:34b** - Automaton Generation
+- Formal automaton definitions (states, transitions, alphabet)
+- Complete Python implementations for simulation
+- DOT graph code for visualization
+- Comprehensive test case generation
+
+### 📘 **deepseek-coder:33b** - Educational Explanations  
+- Step-by-step reasoning and explanations
+- Conceptual insights about automata theory
+- Real-time tutoring and guidance
+- Educational feedback on student solutions
+
+### AI Capabilities
+
+- **Smart Solution Generation**: Complete automaton solutions with formal definitions
+- **Interactive Tutoring**: Real-time guidance as students build automata
+- **Solution Analysis**: Detailed explanations of user-created automata
+- **Personalized Hints**: Context-aware suggestions based on current progress
+- **Educational Insights**: Deep explanations of automata theory concepts
+- **Graceful Fallbacks**: Works without AI when models are offline
 
 ## Contributing
 

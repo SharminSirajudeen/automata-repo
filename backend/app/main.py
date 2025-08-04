@@ -5,6 +5,7 @@ from typing import List, Dict, Optional, Set, Any
 import re
 import httpx
 import json
+from .agents import AutomataGenerator, AutomataExplainer
 
 app = FastAPI(title="Theory of Computation Tutor", version="1.0.0")
 
@@ -18,7 +19,7 @@ app.add_middleware(
 )
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1:8b"
+OLLAMA_MODEL = "llama3.1:8b"  # Default model
 
 problems_db = {}
 solutions_db = {}
@@ -362,43 +363,17 @@ async def get_ai_hint(problem_id: str, request: AIFeedbackRequest):
         raise HTTPException(status_code=404, detail="Problem not found")
     
     problem = problems_db[problem_id]
+    explainer = AutomataExplainer()
     
-    try:
-        prompt = f"""
-You are a Theory of Computation tutor. A student is working on this problem:
-
-Problem: {problem.title}
-Description: {problem.description}
-Language: {problem.language_description}
-
-The student's current automaton has:
-- {len(request.user_automaton.states)} states
-- {len(request.user_automaton.transitions)} transitions
-
-Provide a single, specific hint to help them make progress. Be encouraging and educational.
-Focus on the next step they should take, not the complete solution.
-"""
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
-                json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=15.0
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                ai_hint = result.get("response", "Try thinking about what states you need to track the progress toward accepting strings.")
-                return {"ai_hint": ai_hint}
-            else:
-                return {"ai_hint": "Try thinking about what states you need to track the progress toward accepting strings."}
-                
-    except Exception as e:
-        return {"ai_hint": "Try thinking about what states you need to track the progress toward accepting strings."}
+    current_progress = {
+        "states": len(request.user_automaton.states),
+        "transitions": len(request.user_automaton.transitions),
+        "start_states": len([s for s in request.user_automaton.states if s.is_start]),
+        "accept_states": len([s for s in request.user_automaton.states if s.is_accept])
+    }
+    
+    ai_hint = await explainer.provide_step_guidance(problem.description, current_progress)
+    return {"ai_hint": ai_hint}
 
 @app.get("/ai/status")
 async def check_ai_status():
@@ -412,9 +387,51 @@ async def check_ai_status():
                 return {
                     "available": True,
                     "models": available_models,
-                    "current_model": OLLAMA_MODEL
+                    "current_model": OLLAMA_MODEL,
+                    "generator_model": "codellama:34b",
+                    "explainer_model": "deepseek-coder:33b"
                 }
             else:
                 return {"available": False, "error": "Ollama service not responding"}
     except Exception as e:
         return {"available": False, "error": str(e)}
+
+@app.post("/problems/{problem_id}/generate-solution")
+async def generate_solution(problem_id: str):
+    """Generate a complete automaton solution using AI"""
+    if problem_id not in problems_db:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    
+    problem = problems_db[problem_id]
+    generator = AutomataGenerator()
+    explainer = AutomataExplainer()
+    
+    automaton_data = await generator.generate_automaton(problem.description, problem.type)
+    
+    explanation_data = await explainer.explain_automaton(problem.description, automaton_data)
+    
+    return {
+        "problem_id": problem_id,
+        "generated_automaton": automaton_data,
+        "explanation": explanation_data,
+        "note": "This is a reference solution. Try building your own first!"
+    }
+
+@app.post("/problems/{problem_id}/explain-solution")
+async def explain_solution(problem_id: str, solution: Solution):
+    """Get detailed explanation of a user's automaton solution"""
+    if problem_id not in problems_db:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    
+    problem = problems_db[problem_id]
+    explainer = AutomataExplainer()
+    
+    automaton_data = {
+        "states": [{"id": s.id, "is_start": s.is_start, "is_accept": s.is_accept} for s in solution.automaton.states],
+        "transitions": [{"from": t.from_state, "to": t.to_state, "symbol": t.symbol} for t in solution.automaton.transitions],
+        "alphabet": solution.automaton.alphabet
+    }
+    
+    explanation_data = await explainer.explain_automaton(problem.description, automaton_data, solution.automaton)
+    
+    return explanation_data

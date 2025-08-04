@@ -57,3 +57,9 @@ export interface AIFeedbackRequest {
   test_results: Array<any>;
   mistakes: string[];
 }
+
+export interface Solution {
+  problem_id: string;
+  automaton: Automaton;
+  user_id?: string;
+}

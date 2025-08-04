@@ -1,4 +1,4 @@
-import { Automaton, Problem, ValidationResult, AIFeedbackRequest } from '../types/automata';
+import { Automaton, Problem, ValidationResult, AIFeedbackRequest, Solution } from '../types/automata';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
 
@@ -52,6 +52,25 @@ class ApiService {
   async checkAIStatus(): Promise<{ available: boolean; models?: string[]; current_model?: string; error?: string }> {
     const response = await fetch(`${API_BASE_URL}/ai/status`);
     if (!response.ok) throw new Error('Failed to check AI status');
+    return response.json();
+  }
+
+  async generateSolution(problemId: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/problems/${problemId}/generate-solution`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Failed to generate solution');
+    return response.json();
+  }
+
+  async explainSolution(problemId: string, solution: Solution): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/problems/${problemId}/explain-solution`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(solution)
+    });
+    if (!response.ok) throw new Error('Failed to explain solution');
     return response.json();
   }
 }
