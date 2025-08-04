@@ -40,7 +40,6 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
   const [showSymbolInput, setShowSymbolInput] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<{ from: string; to: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [draggedState, setDraggedState] = useState<string | null>(null);
   const [editingTransition, setEditingTransition] = useState<number | null>(null);
   const [editSymbol, setEditSymbol] = useState('');
@@ -156,7 +155,7 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
       ctx.textAlign = 'center';
       ctx.fillText(state.label || state.id, state.x, state.y + 5);
     });
-  }, [automaton, selectedState, selectedTransition, isSimulating, simulationPath, currentSimulationStep]);
+  }, [automaton, selectedState, selectedTransition, isSimulating, simulationPath, currentSimulationStep, isDragging, draggedState]);
 
   useEffect(() => {
     drawCanvas();
@@ -196,7 +195,6 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
 
         const dx = toState.x - fromState.x;
         const dy = toState.y - fromState.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
         
         for (let t = 0.2; t <= 0.8; t += 0.1) {
           const checkX = fromState.x + dx * t;
@@ -459,13 +457,12 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
             
             if (clickedState) {
               setIsDragging(true);
-              setDragStart({ x, y });
               setDraggedState(clickedState.id);
               e.preventDefault();
             }
           }}
           onMouseMove={(e) => {
-            if (!isDragging || !draggedState || !dragStart) return;
+            if (!isDragging || !draggedState) return;
             
             const canvas = canvasRef.current;
             if (!canvas) return;
@@ -489,12 +486,10 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
           }}
           onMouseUp={() => {
             setIsDragging(false);
-            setDragStart(null);
             setDraggedState(null);
           }}
           onMouseLeave={() => {
             setIsDragging(false);
-            setDragStart(null);
             setDraggedState(null);
           }}
           onDoubleClick={(e) => {
