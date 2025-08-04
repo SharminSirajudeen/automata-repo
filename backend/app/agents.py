@@ -50,7 +50,7 @@ Format your response as JSON with keys: formal_definition, python_code, dot_grap
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=60.0
+                    timeout=120.0
                 )
                 
                 if response.status_code == 200:
@@ -132,7 +132,7 @@ Be encouraging, clear, and pedagogically sound. Use analogies where helpful.
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=45.0
+                    timeout=90.0
                 )
                 
                 if response.status_code == 200:
@@ -162,9 +162,16 @@ Student's Current Progress:
 - Transitions: {current_progress.get('transitions', 0)}
 - Start States: {current_progress.get('start_states', 0)}
 - Accept States: {current_progress.get('accept_states', 0)}
+- Current States: {current_progress.get('state_list', [])}
+- Current Transitions: {current_progress.get('transition_list', [])}
 
-Provide ONE specific, actionable next step. Be encouraging and educational.
-Focus on what they should do next, not the complete solution.
+Provide ONE specific, actionable next step. Be very specific about:
+- Exactly which state to add next (if needed) and where to place it
+- Which transitions to add and between which specific states
+- Which states should be marked as start/accept states
+- Be encouraging and educational but focus on the immediate next action.
+
+Format: "Next step: [specific action]"
 """
 
         try:
@@ -176,7 +183,7 @@ Focus on what they should do next, not the complete solution.
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=15.0
+                    timeout=30.0
                 )
                 
                 if response.status_code == 200:

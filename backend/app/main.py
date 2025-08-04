@@ -435,3 +435,24 @@ async def explain_solution(problem_id: str, solution: Solution):
     explanation_data = await explainer.explain_automaton(problem.description, automaton_data, solution.automaton)
     
     return explanation_data
+
+@app.post("/problems/{problem_id}/guided-step")
+async def get_guided_step(problem_id: str, request: AIFeedbackRequest):
+    """Get specific guidance for the next step in automaton construction"""
+    if problem_id not in problems_db:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    
+    problem = problems_db[problem_id]
+    explainer = AutomataExplainer()
+    
+    current_progress = {
+        "states": len(request.user_automaton.states),
+        "transitions": len(request.user_automaton.transitions),
+        "start_states": len([s for s in request.user_automaton.states if s.is_start]),
+        "accept_states": len([s for s in request.user_automaton.states if s.is_accept]),
+        "state_list": [{"id": s.id, "is_start": s.is_start, "is_accept": s.is_accept} for s in request.user_automaton.states],
+        "transition_list": [{"from": t.from_state, "to": t.to_state, "symbol": t.symbol} for t in request.user_automaton.transitions]
+    }
+    
+    guided_step = await explainer.provide_step_guidance(problem.description, current_progress)
+    return {"guided_step": guided_step, "current_progress": current_progress}

@@ -73,6 +73,16 @@ class ApiService {
     if (!response.ok) throw new Error('Failed to explain solution');
     return response.json();
   }
+
+  async getGuidedStep(problemId: string, request: AIFeedbackRequest): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/problems/${problemId}/guided-step`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+    if (!response.ok) throw new Error('Failed to get guided step');
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();
