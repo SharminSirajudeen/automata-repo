@@ -54,6 +54,7 @@ export const AITutor: React.FC<AITutorProps> = ({
         user_automaton: automaton,
         test_results: validationResult?.test_results || [],
         mistakes: validationResult?.mistakes || [],
+        automata_type: problem.type,
       });
       setCurrentHint(response.ai_hint);
       
@@ -118,6 +119,7 @@ export const AITutor: React.FC<AITutorProps> = ({
         user_automaton: automaton,
         test_results: validationResult?.test_results || [],
         mistakes: validationResult?.mistakes || [],
+        automata_type: problem.type,
       });
       setCurrentGuidedStep(response.guided_step);
     } catch (error) {
