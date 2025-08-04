@@ -17,6 +17,9 @@ interface AutomataCanvasProps {
   stepExplanations?: { [key: string]: string };
   onStateHover?: (stateId: string) => void;
   onTransitionHover?: (transitionIndex: number) => void;
+  alphabet?: string[];
+  readOnly?: boolean;
+  automatonType?: string;
 }
 
 export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
@@ -29,7 +32,7 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
   showInteractiveOverlay = false,
   stepExplanations = {},
   onStateHover,
-  onTransitionHover,
+  onTransitionHover
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);

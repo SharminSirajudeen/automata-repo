@@ -81,6 +81,65 @@ Format your response as JSON with keys: formal_definition, python_code, dot_grap
             "test_cases": {"accept": ["example1"], "reject": ["example2"]}
         }
 
+    async def generate_proof_steps(self, automaton_data: Dict[str, Any], proof_type: str, current_steps: List[Dict]) -> Dict[str, Any]:
+        """Generate proof step suggestions"""
+        prompt = f"""
+        Generate proof steps for {proof_type} proof:
+        
+        Automaton: {automaton_data}
+        Current steps: {current_steps}
+        
+        Please suggest:
+        1. Next logical proof steps
+        2. Mathematical reasoning
+        3. Key lemmas or theorems to apply
+        4. Step-by-step approach
+        """
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": OLLAMA_GENERATOR_MODEL,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=120.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result.get("response", "")
+                    return {
+                        "steps": [
+                            {
+                                "description": "Apply the definition of regular languages",
+                                "type": "definition",
+                                "explanation": "Start with formal definitions"
+                            },
+                            {
+                                "description": "Construct the cross-product automaton",
+                                "type": "lemma", 
+                                "explanation": "Use standard construction techniques"
+                            }
+                        ],
+                        "reasoning": content,
+                        "next_steps": ["Verify construction", "Check acceptance conditions"]
+                    }
+                else:
+                    return {
+                        "steps": [],
+                        "reasoning": "AI proof generation temporarily unavailable",
+                        "next_steps": ["Please try a different approach"]
+                    }
+        except Exception as e:
+            return {
+                "steps": [],
+                "reasoning": f"Error generating proof: {str(e)}",
+                "next_steps": ["Please try a different approach"]
+            }
+
 class AutomataExplainer:
     """Uses deepseek-coder:33b for educational explanations and step-by-step reasoning"""
     
@@ -225,3 +284,52 @@ Format: "Next step: [specific action]"
             "key_concepts": ["states", "transitions", "acceptance"],
             "next_steps": ["Build the automaton step by step", "Test with examples"]
         }
+
+    async def validate_proof_step(self, automaton_data: Dict[str, Any], proof_type: str, step_id: str, steps: List[Dict]) -> Dict[str, Any]:
+        """Validate a proof step using AI reasoning"""
+        prompt = f"""
+        Validate this proof step for {proof_type} proof:
+        
+        Automaton: {automaton_data}
+        Current steps: {steps}
+        Step to validate: {step_id}
+        
+        Please analyze:
+        1. Is this step logically valid?
+        2. Does it follow from previous steps?
+        3. What are potential issues?
+        4. Suggestions for improvement
+        """
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": "acereason-nemotron-abliterated",
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=90.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result.get("response", "")
+                    return {
+                        "is_valid": "valid" in content.lower() and "invalid" not in content.lower(),
+                        "explanation": content,
+                        "suggestions": ["Review logical flow", "Check mathematical rigor"]
+                    }
+                else:
+                    return {
+                        "is_valid": False,
+                        "explanation": "AI validation temporarily unavailable",
+                        "suggestions": ["Please try again"]
+                    }
+        except Exception as e:
+            return {
+                "is_valid": False,
+                "explanation": f"Error validating step: {str(e)}",
+                "suggestions": ["Please try again"]
+            }

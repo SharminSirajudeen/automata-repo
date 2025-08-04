@@ -56,7 +56,25 @@ export const ProblemSelector: React.FC<ProblemSelectorProps> = ({ onSelectProble
 
   const problemTypes = ['all', ...Array.from(new Set(problems.map(p => p.type)))];
 
+  const getTypeDisplayName = (type: string) => {
+    const typeNames: { [key: string]: string } = {
+      'dfa': 'DFA',
+      'nfa': 'NFA', 
+      'enfa': 'ε-NFA',
+      'pda': 'PDA',
+      'cfg': 'CFG',
+      'tm': 'Turing Machine',
+      'regex': 'Regular Expression',
+      'pumping': 'Pumping Lemma'
+    };
+    return typeNames[type] || type.toUpperCase();
+  };
+
   const getDifficultyLevel = (problem: Problem) => {
+    if (problem.difficulty) {
+      return problem.difficulty.charAt(0).toUpperCase() + problem.difficulty.slice(1);
+    }
+    
     const testCaseCount = problem.test_strings.length;
     const alphabetSize = problem.alphabet.length;
     
@@ -66,10 +84,13 @@ export const ProblemSelector: React.FC<ProblemSelectorProps> = ({ onSelectProble
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Easy': return 'bg-green-100 text-green-800';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800';
-      case 'Hard': return 'bg-red-100 text-red-800';
+    switch (difficulty.toLowerCase()) {
+      case 'easy':
+      case 'beginner': return 'bg-green-100 text-green-800';
+      case 'medium':
+      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
+      case 'hard':
+      case 'advanced': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -117,7 +138,7 @@ export const ProblemSelector: React.FC<ProblemSelectorProps> = ({ onSelectProble
               size="sm"
               className="capitalize"
             >
-              {type === 'all' ? 'All Types' : type.toUpperCase()}
+              {type === 'all' ? 'All Types' : getTypeDisplayName(type)}
             </Button>
           ))}
         </div>
@@ -135,8 +156,8 @@ export const ProblemSelector: React.FC<ProblemSelectorProps> = ({ onSelectProble
                       {problem.title}
                     </CardTitle>
                     <div className="flex gap-2">
-                      <Badge variant="secondary" className="uppercase">
-                        {problem.type}
+                      <Badge variant="secondary">
+                        {getTypeDisplayName(problem.type)}
                       </Badge>
                       <Badge className={getDifficultyColor(difficulty)}>
                         {difficulty}
@@ -155,6 +176,10 @@ export const ProblemSelector: React.FC<ProblemSelectorProps> = ({ onSelectProble
                 <p className="text-gray-600 text-sm line-clamp-3">
                   {problem.description}
                 </p>
+                
+                {problem.category && (
+                  <p className="text-sm text-purple-600 font-medium">{problem.category}</p>
+                )}
                 
                 <div className="space-y-2">
                   <div className="text-sm">
