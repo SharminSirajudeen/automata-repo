@@ -162,7 +162,7 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
   }, [drawCanvas]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isDragging) return;
+    if (isDragging || draggedState) return;
     
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -458,7 +458,9 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
             if (clickedState) {
               setIsDragging(true);
               setDraggedState(clickedState.id);
+              setSelectedState(clickedState.id);
               e.preventDefault();
+              e.stopPropagation();
             }
           }}
           onMouseMove={(e) => {
@@ -485,12 +487,18 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
             e.preventDefault();
           }}
           onMouseUp={() => {
-            setIsDragging(false);
-            setDraggedState(null);
+            if (isDragging) {
+              setTimeout(() => {
+                setIsDragging(false);
+                setDraggedState(null);
+              }, 50);
+            }
           }}
           onMouseLeave={() => {
-            setIsDragging(false);
-            setDraggedState(null);
+            if (isDragging) {
+              setIsDragging(false);
+              setDraggedState(null);
+            }
           }}
           onDoubleClick={(e) => {
             const canvas = canvasRef.current;
