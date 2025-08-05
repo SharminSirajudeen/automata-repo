@@ -62,6 +62,8 @@ export const AutomataCanvas: React.FC<AutomataCanvasProps> = ({
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    if (!automaton || !automaton.transitions || !automaton.states) return;
+
     automaton.transitions.forEach((transition, index) => {
       const fromState = automaton.states.find(s => s.id === transition.from_state);
       const toState = automaton.states.find(s => s.id === transition.to_state);

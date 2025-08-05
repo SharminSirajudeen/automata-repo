@@ -1464,6 +1464,115 @@ async def generate_automaton_endpoint(request: Dict[str, Any]):
         "type": automaton_type
     }
 
+@app.post("/api/complete-solution")
+async def generate_complete_solution_endpoint(request: Dict[str, Any]):
+    """Generate complete solution for any TOC problem with detailed explanation"""
+    import asyncio
+    
+    task = request.get("task", "")
+    problem_type = request.get("problem_type", "dfa")
+    problem_id = request.get("problem_id", "")
+    
+    try:
+        generator = AutomataGenerator()
+        result = await asyncio.wait_for(
+            generator.generate_automaton(task, problem_type), 
+            timeout=30.0
+        )
+        
+        explainer = AutomataExplainer()
+        explanation = await asyncio.wait_for(
+            explainer.explain_automaton(task, result), 
+            timeout=20.0
+        )
+        
+        return {
+            "formal_definition": result.get("formal_definition", ""),
+            "python_code": result.get("python_code", ""),
+            "dot_graph": result.get("dot_graph", ""),
+            "test_cases": result.get("test_cases", {}),
+            "explanation": explanation.get("explanation", ""),
+            "automaton": result,
+            "task": task,
+            "type": problem_type
+        }
+    except asyncio.TimeoutError:
+        return {
+            "formal_definition": f"Timeout occurred while generating solution for {problem_type}",
+            "python_code": "# AI generation timed out, using fallback",
+            "dot_graph": "",
+            "test_cases": {},
+            "explanation": "AI model took too long to respond. Please try again.",
+            "automaton": generate_fallback_automaton(problem_type, task),
+            "task": task,
+            "type": problem_type,
+            "error": "timeout"
+        }
+    except Exception as e:
+        return {
+            "formal_definition": f"Error generating solution: {str(e)}",
+            "python_code": "# Error occurred during generation",
+            "dot_graph": "",
+            "test_cases": {},
+            "explanation": f"An error occurred: {str(e)}",
+            "automaton": generate_fallback_automaton(problem_type, task),
+            "task": task,
+            "type": problem_type,
+            "error": str(e)
+        }
+
+@app.post("/api/guided-approach")
+async def provide_guided_approach_endpoint(request: Dict[str, Any]):
+    """Provide guided step-by-step approach for solving TOC problems"""
+    import asyncio
+    
+    task = request.get("task", "")
+    problem_type = request.get("problem_type", "dfa")
+    current_progress = request.get("current_progress", {})
+    
+    try:
+        explainer = AutomataExplainer()
+        next_step = await asyncio.wait_for(
+            explainer.provide_step_guidance(task, current_progress),
+            timeout=15.0
+        )
+        
+        steps = [
+            next_step,
+            "Consider what states you need to track the problem requirements",
+            "Add transitions between states based on input symbols",
+            "Mark appropriate start and accept states",
+            "Test your automaton with the provided examples"
+        ]
+        
+        return {
+            "steps": steps,
+            "next_step": next_step,
+            "task": task,
+            "type": problem_type,
+            "current_progress": current_progress
+        }
+    except asyncio.TimeoutError:
+        fallback_steps = generate_fallback_guidance(problem_type, task)
+        return {
+            "steps": fallback_steps,
+            "next_step": fallback_steps[0] if fallback_steps else "Start by identifying the problem requirements",
+            "task": task,
+            "type": problem_type,
+            "current_progress": current_progress,
+            "error": "timeout"
+        }
+    except Exception as e:
+        fallback_steps = generate_fallback_guidance(problem_type, task)
+        return {
+            "steps": fallback_steps,
+            "next_step": fallback_steps[0] if fallback_steps else "Start by identifying the problem requirements",
+            "task": task,
+            "type": problem_type,
+            "current_progress": current_progress,
+            "error": str(e)
+        }
+
 @app.post("/api/explain")
 async def explain_automaton_endpoint(request: Dict[str, Any]):
     """Explain automaton structure and behavior"""
@@ -2048,3 +2157,147 @@ async def generate_proof_endpoint(request: Dict[str, Any]):
             "reasoning": f"Error generating proof: {str(e)}",
             "next_steps": ["Please try a different approach"]
         }
+
+def generate_fallback_automaton(problem_type: str, task: str) -> Dict[str, Any]:
+    """Generate a basic fallback automaton when AI models fail"""
+    if problem_type == "dfa":
+        return {
+            "states": [
+                {"id": "q0", "x": 100, "y": 100, "is_start": True, "is_accept": False},
+                {"id": "q1", "x": 200, "y": 100, "is_start": False, "is_accept": True}
+            ],
+            "transitions": [
+                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
+                {"from_state": "q1", "to_state": "q1", "symbol": "a,b"}
+            ],
+            "alphabet": ["a", "b"]
+        }
+    elif problem_type == "nfa":
+        return {
+            "states": [
+                {"id": "q0", "x": 100, "y": 100, "is_start": True, "is_accept": False},
+                {"id": "q1", "x": 200, "y": 100, "is_start": False, "is_accept": True}
+            ],
+            "transitions": [
+                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"}
+            ],
+            "alphabet": ["a", "b"]
+        }
+    elif problem_type == "pda":
+        return {
+            "states": [
+                {"id": "q0", "x": 100, "y": 100, "is_start": True, "is_accept": False},
+                {"id": "q1", "x": 200, "y": 100, "is_start": False, "is_accept": True}
+            ],
+            "transitions": [
+                {"from_state": "q0", "to_state": "q1", "symbol": "a", "stack_pop": "Z", "stack_push": "aZ"}
+            ],
+            "alphabet": ["a", "b"],
+            "stack_alphabet": ["a", "Z"]
+        }
+    else:
+        return {
+            "states": [{"id": "q0", "x": 100, "y": 100, "is_start": True, "is_accept": True}],
+            "transitions": [],
+            "alphabet": ["a", "b"]
+        }
+
+@app.post("/api/analyze-problem")
+async def analyze_problem_endpoint(request: Dict[str, Any]):
+    """Analyze natural language or image problem input"""
+    problem_text = request.get("problem_text", "")
+    problem_type = request.get("type", "text")
+    
+    try:
+        generator = AutomataGenerator()
+        explainer = AutomataExplainer()
+        
+        is_toc_problem = await generator.is_toc_problem(problem_text, problem_type)
+        
+        if not is_toc_problem:
+            return {
+                "is_toc_problem": False,
+                "message": "This doesn't appear to be a Theory of Computation problem. Please provide a problem related to automata, formal languages, or computability theory.",
+                "suggestions": [
+                    "Try problems involving DFA, NFA, PDA, or Turing Machines",
+                    "Ask about regular expressions or context-free grammars",
+                    "Request pumping lemma proofs or language equivalence"
+                ]
+            }
+        
+        problem_analysis = await generator.analyze_problem_text(problem_text, problem_type)
+        
+        return {
+            "is_toc_problem": True,
+            "problem_type": problem_analysis.get("automaton_type", "dfa"),
+            "problem_description": problem_analysis.get("description", problem_text),
+            "difficulty": problem_analysis.get("difficulty", "intermediate"),
+            "concepts": problem_analysis.get("concepts", []),
+            "complete_solution": problem_analysis.get("solution", {}),
+            "guided_steps": problem_analysis.get("guided_steps", []),
+            "test_cases": problem_analysis.get("test_cases", {"accept": [], "reject": []})
+        }
+        
+    except Exception as e:
+        return {
+            "is_toc_problem": False,
+            "message": f"Error analyzing problem: {str(e)}",
+            "suggestions": ["Please try rephrasing your problem or check the image quality"]
+        }
+
+def generate_fallback_guidance(problem_type: str, task: str) -> list[str]:
+    """Generate fallback step-by-step guidance when AI models fail"""
+    if problem_type == "dfa":
+        return [
+            "1. Identify what the DFA should accept/reject based on the problem description",
+            "2. Determine the minimum number of states needed to track the pattern",
+            "3. Create a start state and mark it appropriately",
+            "4. Add transitions for each symbol in the alphabet",
+            "5. Mark accept states based on the acceptance criteria",
+            "6. Test with example strings to verify correctness"
+        ]
+    elif problem_type == "nfa":
+        return [
+            "1. Analyze the language pattern to identify non-deterministic choices",
+            "2. Create states to represent different computation paths",
+            "3. Add ε-transitions where multiple paths are possible",
+            "4. Define transitions for each input symbol",
+            "5. Mark appropriate accept states",
+            "6. Verify with test strings that require non-deterministic choices"
+        ]
+    elif problem_type == "pda":
+        return [
+            "1. Identify the context-free pattern that requires stack memory",
+            "2. Design stack operations (push/pop) for each transition",
+            "3. Create states to track the parsing progress",
+            "4. Define transitions with stack operations",
+            "5. Ensure proper stack management for acceptance",
+            "6. Test with nested/balanced string examples"
+        ]
+    elif problem_type == "cfg":
+        return [
+            "1. Identify the recursive structure in the language",
+            "2. Define non-terminal symbols for different syntactic categories",
+            "3. Write production rules for each non-terminal",
+            "4. Ensure the grammar generates the desired language",
+            "5. Check for ambiguity and left recursion",
+            "6. Test derivations with example strings"
+        ]
+    elif problem_type == "tm":
+        return [
+            "1. Analyze the computation that the TM should perform",
+            "2. Design the tape alphabet and state set",
+            "3. Define transitions for reading, writing, and moving",
+            "4. Implement the algorithm step by step",
+            "5. Handle edge cases and termination conditions",
+            "6. Test with various input configurations"
+        ]
+    else:
+        return [
+            "1. Analyze the problem requirements carefully",
+            "2. Choose the appropriate automaton type",
+            "3. Design the state structure",
+            "4. Define transitions systematically",
+            "5. Verify correctness with test cases"
+        ]
