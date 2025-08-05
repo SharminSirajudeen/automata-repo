@@ -1464,6 +1464,56 @@ async def generate_automaton_endpoint(request: Dict[str, Any]):
         "type": automaton_type
     }
 
+@app.post("/api/complete-solution")
+async def generate_complete_solution_endpoint(request: Dict[str, Any]):
+    """Generate complete solution for any TOC problem with detailed explanation"""
+    task = request.get("task", "")
+    problem_type = request.get("problem_type", "dfa")
+    problem_id = request.get("problem_id", "")
+    
+    generator = AutomataGenerator()
+    result = await generator.generate_automaton(task, problem_type)
+    
+    explainer = AutomataExplainer()
+    explanation = await explainer.explain_automaton(task, result)
+    
+    return {
+        "formal_definition": result.get("formal_definition", ""),
+        "python_code": result.get("python_code", ""),
+        "dot_graph": result.get("dot_graph", ""),
+        "test_cases": result.get("test_cases", {}),
+        "explanation": explanation.get("explanation", ""),
+        "automaton": result,
+        "task": task,
+        "type": problem_type
+    }
+
+@app.post("/api/guided-approach")
+async def provide_guided_approach_endpoint(request: Dict[str, Any]):
+    """Provide guided step-by-step approach for solving TOC problems"""
+    task = request.get("task", "")
+    problem_type = request.get("problem_type", "dfa")
+    current_progress = request.get("current_progress", {})
+    
+    explainer = AutomataExplainer()
+    next_step = await explainer.provide_step_guidance(task, current_progress)
+    
+    steps = [
+        next_step,
+        "Consider what states you need to track the problem requirements",
+        "Add transitions between states based on input symbols",
+        "Mark appropriate start and accept states",
+        "Test your automaton with the provided examples"
+    ]
+    
+    return {
+        "steps": steps,
+        "next_step": next_step,
+        "task": task,
+        "type": problem_type,
+        "current_progress": current_progress
+    }
+
 @app.post("/api/explain")
 async def explain_automaton_endpoint(request: Dict[str, Any]):
     """Explain automaton structure and behavior"""
