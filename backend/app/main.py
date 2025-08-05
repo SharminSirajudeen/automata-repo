@@ -1152,7 +1152,10 @@ def extract_derivation_steps(parse_tree: dict) -> list[str]:
 
 def simulate_cfg(automaton: Any, input_string: str) -> tuple[bool, Any]:
     """Simulate CFG parsing on input string using CYK algorithm"""
-    if not hasattr(automaton, 'productions') or not hasattr(automaton, 'terminals'):
+    print(f"DEBUG: CFG automaton structure: {automaton}")
+    print(f"DEBUG: CFG automaton type: {type(automaton)}")
+    
+    if not isinstance(automaton, dict) or 'productions' not in automaton or 'terminals' not in automaton:
         return False, None
     
     productions = automaton['productions']
@@ -1256,8 +1259,11 @@ def validate_tm(automaton: Any, problem: Problem) -> ValidationResult:
 
 def simulate_tm(automaton: Any, input_string: str) -> tuple[bool, list[str], list[str]]:
     """Simulate Turing Machine execution on input string with detailed step tracking"""
-    if not hasattr(automaton, 'transitions') or not hasattr(automaton, 'states'):
-        return False, ["Invalid TM structure"], []
+    print(f"DEBUG: TM automaton structure: {automaton}")
+    print(f"DEBUG: TM automaton type: {type(automaton)}")
+    
+    if not isinstance(automaton, dict) or 'transitions' not in automaton or 'states' not in automaton:
+        return False, ["Invalid TM structure - missing transitions or states"], []
     
     blank_symbol = automaton.get('blank_symbol', '_')
     tape = list(input_string) + [blank_symbol] * 100
@@ -1368,7 +1374,10 @@ def simulate_regex(automaton: Any, input_string: str) -> bool:
     """Simulate regex matching on input string"""
     import re
     
-    if not hasattr(automaton, 'pattern'):
+    print(f"DEBUG: Regex automaton structure: {automaton}")
+    print(f"DEBUG: Regex automaton type: {type(automaton)}")
+    
+    if not isinstance(automaton, dict) or 'pattern' not in automaton:
         return False
     
     pattern = automaton['pattern']
@@ -1426,6 +1435,9 @@ def validate_pumping_lemma(automaton: Any, problem: Problem) -> ValidationResult
 
 def simulate_pumping_lemma(automaton: Any, input_string: str) -> bool:
     """Simulate pumping lemma proof verification"""
+    print(f"DEBUG: Pumping Lemma automaton structure: {automaton}")
+    print(f"DEBUG: Pumping Lemma automaton type: {type(automaton)}")
+    
     language_type = automaton.get('language_type', 'regular')
     
     if language_type == 'regular':
