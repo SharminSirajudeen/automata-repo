@@ -996,8 +996,11 @@ def can_pop_stack(stack: list, pop_symbol: str) -> bool:
 
 def simulate_pda(automaton: Any, input_string: str) -> tuple[bool, list[str], list[str]]:
     """Simulate PDA execution on input string with detailed step tracking"""
-    if not hasattr(automaton, 'transitions') or not hasattr(automaton, 'states'):
-        return False, ["Invalid PDA structure"], []
+    print(f"DEBUG: PDA automaton structure: {automaton}")
+    print(f"DEBUG: PDA automaton type: {type(automaton)}")
+    
+    if not isinstance(automaton, dict) or 'transitions' not in automaton or 'states' not in automaton:
+        return False, ["Invalid PDA structure - missing transitions or states"], []
     
     current_states = set()
     stack = [automaton.get('start_stack_symbol', 'Z')]
@@ -1657,10 +1660,12 @@ def generate_simulation_steps_pda(automaton: Any, input_string: str, path: list[
     """Generate simulation steps for PDA"""
     steps = []
     for i, (step_desc, stack_state) in enumerate(zip(path, stack_trace + [""])):
+        remaining_input = input_string[i:] if i < len(input_string) else ""
         steps.append(SimulationStep(
             step_number=i,
             current_state=extract_state_from_path(step_desc),
             input_position=i,
+            remaining_input=remaining_input,
             action_description=step_desc,
             stack_contents=parse_stack_contents(stack_state) if stack_state else [],
             tape_contents=[],
@@ -1673,10 +1678,12 @@ def generate_simulation_steps_cfg(automaton: Any, input_string: str, parse_info:
     steps = []
     if parse_info and 'derivation' in parse_info:
         for i, derivation_step in enumerate(parse_info['derivation']):
+            remaining_input = input_string[i:] if i < len(input_string) else ""
             steps.append(SimulationStep(
                 step_number=i,
                 current_state="parsing",
                 input_position=i,
+                remaining_input=remaining_input,
                 action_description=derivation_step,
                 stack_contents=[],
                 tape_contents=[],
@@ -1689,10 +1696,12 @@ def generate_simulation_steps_tm(automaton: Any, input_string: str, path: list[s
     steps = []
     for i, (step_desc, tape_state) in enumerate(zip(path, tape_trace + [""])):
         tape_contents, head_pos = parse_tape_contents(tape_state) if tape_state else ([], 0)
+        remaining_input = input_string[i:] if i < len(input_string) else ""
         steps.append(SimulationStep(
             step_number=i,
             current_state=extract_state_from_path(step_desc),
             input_position=i,
+            remaining_input=remaining_input,
             action_description=step_desc,
             stack_contents=[],
             tape_contents=tape_contents,
@@ -1706,6 +1715,7 @@ def generate_simulation_steps_regex(automaton: Any, input_string: str, accepted:
         step_number=0,
         current_state="matching",
         input_position=len(input_string),
+        remaining_input="",
         action_description=f"Pattern {'matches' if accepted else 'does not match'} input string",
         stack_contents=[],
         tape_contents=[],
@@ -1718,6 +1728,7 @@ def generate_simulation_steps_pumping(automaton: Any, input_string: str, accepte
         step_number=0,
         current_state="verifying",
         input_position=len(input_string),
+        remaining_input="",
         action_description=f"Pumping lemma {'satisfied' if accepted else 'violated'} for input string",
         stack_contents=[],
         tape_contents=[],

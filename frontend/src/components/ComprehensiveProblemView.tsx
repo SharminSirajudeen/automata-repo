@@ -30,7 +30,7 @@ interface ComprehensiveProblemViewProps {
   onBack: () => void;
 }
 
-export const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
+const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
   problem,
   onBack
 }) => {
@@ -90,6 +90,7 @@ export const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> =
   const [activeTab, setActiveTab] = useState('canvas');
 
   const handleAutomatonChange = (newAutomaton: ExtendedAutomaton) => {
+    console.log('Loading new automaton:', newAutomaton);
     setAutomaton(newAutomaton);
     setValidationResult(null);
   };
@@ -409,3 +410,5 @@ export const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> =
     </div>
   );
 };
+
+export { ComprehensiveProblemView };
