@@ -971,9 +971,93 @@ def validate_pda(automaton: Any, problem: Problem) -> ValidationResult:
         mistakes=mistakes
     )
 
+def process_epsilon_transitions_pda(automaton: Any, states: set, stack: list) -> set:
+    """Process all possible ε-transitions from current states"""
+    changed = True
+    while changed:
+        changed = False
+        new_states = set(states)
+        for state_id in states:
+            for transition in automaton['transitions']:
+                if (transition['from_state'] == state_id and 
+                    transition['symbol'] == '' and
+                    transition['to_state'] not in new_states and
+                    can_pop_stack(stack, transition.get('stack_pop', ''))):
+                    new_states.add(transition['to_state'])
+                    changed = True
+        states = new_states
+    return states
+
+def can_pop_stack(stack: list, pop_symbol: str) -> bool:
+    """Check if we can pop the specified symbol from stack"""
+    if not pop_symbol:
+        return True
+    return len(stack) > 0 and stack[-1] == pop_symbol
+
 def simulate_pda(automaton: Any, input_string: str) -> tuple[bool, list[str], list[str]]:
-    """Simulate PDA execution on input string"""
-    return False, ["PDA simulation not yet implemented"], ["Stack trace not available"]
+    """Simulate PDA execution on input string with detailed step tracking"""
+    if not hasattr(automaton, 'transitions') or not hasattr(automaton, 'states'):
+        return False, ["Invalid PDA structure"], []
+    
+    current_states = set()
+    stack = [automaton.get('start_stack_symbol', 'Z')]
+    input_position = 0
+    execution_path = []
+    stack_trace = []
+    
+    start_state = None
+    for state in automaton['states']:
+        if state.get('is_start', False):
+            start_state = state['id']
+            break
+    
+    if not start_state:
+        return False, ["No start state found"], []
+    
+    current_states.add(start_state)
+    current_states = process_epsilon_transitions_pda(automaton, current_states, stack)
+    
+    while input_position <= len(input_string):
+        if input_position == len(input_string):
+            for state_id in current_states:
+                state = next((s for s in automaton['states'] if s['id'] == state_id), None)
+                if state and state.get('is_accept', False):
+                    if len(stack) <= 1:
+                        execution_path.append(f"Accepted in state {state_id}")
+                        return True, execution_path, stack_trace
+            break
+        
+        current_symbol = input_string[input_position]
+        next_states = set()
+        
+        for state_id in current_states:
+            for transition in automaton['transitions']:
+                if (transition['from_state'] == state_id and 
+                    transition['symbol'] == current_symbol and
+                    can_pop_stack(stack, transition.get('stack_pop', ''))):
+                    
+                    new_stack = stack.copy()
+                    if transition.get('stack_pop'):
+                        new_stack.pop()
+                    if transition.get('stack_push'):
+                        new_stack.extend(list(transition['stack_push']))
+                    
+                    next_states.add(transition['to_state'])
+                    execution_path.append(f"δ({state_id}, {current_symbol}, {stack[-1] if stack else 'ε'}) → ({transition['to_state']}, {transition.get('stack_push', 'ε')})")
+                    stack_trace.append(f"Stack: {new_stack}")
+        
+        if not next_states:
+            execution_path.append(f"No valid transitions from states {current_states} on symbol '{current_symbol}'")
+            return False, execution_path, stack_trace
+        
+        current_states = next_states
+        stack = new_stack
+        input_position += 1
+        
+        current_states = process_epsilon_transitions_pda(automaton, current_states, stack)
+    
+    execution_path.append(f"Input consumed but no accepting state reached")
+    return False, execution_path, stack_trace
 
 def validate_cfg(automaton: Any, problem: Problem) -> ValidationResult:
     """Validate a CFG solution against a problem"""
@@ -1023,8 +1107,100 @@ def validate_cfg(automaton: Any, problem: Problem) -> ValidationResult:
         mistakes=mistakes
     )
 
+def build_parse_tree(derivation_info: dict) -> dict:
+    """Build parse tree from derivation information"""
+    if isinstance(derivation_info, str):
+        return {"symbol": derivation_info, "children": []}
+    
+    result = {
+        "symbol": derivation_info["production"].split(" → ")[0],
+        "children": []
+    }
+    
+    for child in derivation_info.get("children", []):
+        if isinstance(child, str):
+            result["children"].append({"symbol": child, "children": []})
+        else:
+            result["children"].append(build_parse_tree(child))
+    
+    return result
+
+def extract_derivation_steps(parse_tree: dict) -> list[str]:
+    """Extract step-by-step derivation from parse tree"""
+    steps = []
+    
+    def traverse(node, current_derivation):
+        if not node.get("children"):
+            return current_derivation
+        
+        for i, child in enumerate(node["children"]):
+            if child["children"]:
+                production = f"{child['symbol']} → {' '.join([c['symbol'] for c in child['children']])}"
+                steps.append(production)
+                new_derivation = current_derivation.replace(child['symbol'], ' '.join([c['symbol'] for c in child['children']]), 1)
+                return traverse(child, new_derivation)
+        
+        return current_derivation
+    
+    initial = parse_tree["symbol"]
+    steps.append(f"Start: {initial}")
+    traverse(parse_tree, initial)
+    return steps
+
 def simulate_cfg(automaton: Any, input_string: str) -> tuple[bool, Any]:
-    """Simulate CFG parsing on input string"""
+    """Simulate CFG parsing on input string using CYK algorithm"""
+    if not hasattr(automaton, 'productions') or not hasattr(automaton, 'terminals'):
+        return False, None
+    
+    productions = automaton['productions']
+    terminals = set(automaton['terminals'])
+    non_terminals = set(automaton['non_terminals'])
+    start_symbol = automaton.get('start_symbol', 'S')
+    
+    if not input_string:
+        for prod in productions:
+            if prod['left_side'] == start_symbol and prod['right_side'] == '':
+                return True, {"derivation": [f"{start_symbol} → ε"], "parse_tree": {"symbol": start_symbol, "children": []}}
+        return False, None
+    
+    n = len(input_string)
+    table = [[set() for _ in range(n + 1)] for _ in range(n)]
+    derivations = [[{} for _ in range(n + 1)] for _ in range(n)]
+    
+    for i in range(n):
+        char = input_string[i]
+        for prod in productions:
+            if prod['right_side'] == char and prod['left_side'] in non_terminals:
+                table[i][1].add(prod['left_side'])
+                derivations[i][1][prod['left_side']] = {
+                    "production": f"{prod['left_side']} → {char}",
+                    "children": [char]
+                }
+    
+    for length in range(2, n + 1):
+        for i in range(n - length + 1):
+            for k in range(1, length):
+                left_symbols = table[i][k]
+                right_symbols = table[i + k][length - k]
+                
+                for prod in productions:
+                    if len(prod['right_side']) == 2:
+                        left_nt, right_nt = prod['right_side'][0], prod['right_side'][1]
+                        if left_nt in left_symbols and right_nt in right_symbols:
+                            table[i][length].add(prod['left_side'])
+                            derivations[i][length][prod['left_side']] = {
+                                "production": f"{prod['left_side']} → {left_nt}{right_nt}",
+                                "children": [
+                                    derivations[i][k][left_nt],
+                                    derivations[i + k][length - k][right_nt]
+                                ]
+                            }
+    
+    if start_symbol in table[0][n]:
+        parse_tree = build_parse_tree(derivations[0][n][start_symbol])
+        derivation_steps = extract_derivation_steps(parse_tree)
+        return True, {"derivation": derivation_steps, "parse_tree": parse_tree}
+    
     return False, None
 
 def validate_tm(automaton: Any, problem: Problem) -> ValidationResult:
@@ -1076,8 +1252,68 @@ def validate_tm(automaton: Any, problem: Problem) -> ValidationResult:
     )
 
 def simulate_tm(automaton: Any, input_string: str) -> tuple[bool, list[str], list[str]]:
-    """Simulate Turing Machine execution on input string"""
-    return False, ["TM simulation not yet implemented"], ["Tape trace not available"]
+    """Simulate Turing Machine execution on input string with detailed step tracking"""
+    if not hasattr(automaton, 'transitions') or not hasattr(automaton, 'states'):
+        return False, ["Invalid TM structure"], []
+    
+    blank_symbol = automaton.get('blank_symbol', '_')
+    tape = list(input_string) + [blank_symbol] * 100
+    head_position = 0
+    execution_path = []
+    tape_trace = []
+    
+    current_state = None
+    for state in automaton['states']:
+        if state.get('is_start', False):
+            current_state = state['id']
+            break
+    
+    if not current_state:
+        return False, ["No start state found"], []
+    
+    step_count = 0
+    max_steps = 10000
+    
+    while step_count < max_steps:
+        current_state_obj = next((s for s in automaton['states'] if s['id'] == current_state), None)
+        if current_state_obj and current_state_obj.get('is_accept', False):
+            execution_path.append(f"Accepted in state {current_state}")
+            tape_trace.append(f"Final tape: {''.join(tape[:50]).rstrip(blank_symbol)}")
+            return True, execution_path, tape_trace
+        
+        current_symbol = tape[head_position] if head_position < len(tape) else blank_symbol
+        
+        transition_found = False
+        for transition in automaton['transitions']:
+            if (transition['from_state'] == current_state and 
+                transition['read_symbol'] == current_symbol):
+                
+                tape[head_position] = transition['write_symbol']
+                
+                if transition['head_direction'] == 'L':
+                    head_position = max(0, head_position - 1)
+                elif transition['head_direction'] == 'R':
+                    head_position += 1
+                    if head_position >= len(tape):
+                        tape.extend([blank_symbol] * 100)
+                
+                current_state = transition['to_state']
+                
+                execution_path.append(f"δ({transition['from_state']}, {current_symbol}) → ({current_state}, {transition['write_symbol']}, {transition['head_direction']})")
+                tape_trace.append(f"Tape: {''.join(tape[:min(50, head_position + 20)]).rstrip(blank_symbol)}, Head: {head_position}")
+                
+                transition_found = True
+                break
+        
+        if not transition_found:
+            execution_path.append(f"No transition from state {current_state} on symbol '{current_symbol}'")
+            tape_trace.append(f"Final tape: {''.join(tape[:50]).rstrip(blank_symbol)}")
+            return False, execution_path, tape_trace
+        
+        step_count += 1
+    
+    execution_path.append(f"Maximum steps ({max_steps}) exceeded - possible infinite loop")
+    return False, execution_path, tape_trace
 
 def validate_regex(automaton: Any, problem: Problem) -> ValidationResult:
     """Validate a Regular Expression solution against a problem"""
@@ -1127,7 +1363,17 @@ def validate_regex(automaton: Any, problem: Problem) -> ValidationResult:
 
 def simulate_regex(automaton: Any, input_string: str) -> bool:
     """Simulate regex matching on input string"""
-    return False
+    import re
+    
+    if not hasattr(automaton, 'pattern'):
+        return False
+    
+    pattern = automaton['pattern']
+    try:
+        match = re.fullmatch(pattern, input_string)
+        return match is not None
+    except re.error:
+        return False
 
 def validate_pumping_lemma(automaton: Any, problem: Problem) -> ValidationResult:
     """Validate a Pumping Lemma proof against a problem"""
@@ -1177,6 +1423,15 @@ def validate_pumping_lemma(automaton: Any, problem: Problem) -> ValidationResult
 
 def simulate_pumping_lemma(automaton: Any, input_string: str) -> bool:
     """Simulate pumping lemma proof verification"""
+    language_type = automaton.get('language_type', 'regular')
+    
+    if language_type == 'regular':
+        pumping_length = automaton.get('pumping_length', 10)
+        return len(input_string) >= pumping_length
+    elif language_type == 'context_free':
+        pumping_length = automaton.get('pumping_length', 15)
+        return len(input_string) >= pumping_length
+    
     return False
 
 @app.post("/api/generate")
@@ -1229,6 +1484,21 @@ async def simulate_automaton_endpoint(request: Dict[str, Any]):
                 final_state=path[-1] if path else "",
                 execution_path=path
             )
+        elif automaton_type == 'pda':
+            accepted, path, stack_trace = simulate_pda(automaton_data, input_string)
+            steps = generate_simulation_steps_pda(automaton_data, input_string, path, stack_trace)
+        elif automaton_type == 'cfg':
+            accepted, parse_info = simulate_cfg(automaton_data, input_string)
+            steps = generate_simulation_steps_cfg(automaton_data, input_string, parse_info)
+        elif automaton_type == 'tm':
+            accepted, path, tape_trace = simulate_tm(automaton_data, input_string)
+            steps = generate_simulation_steps_tm(automaton_data, input_string, path, tape_trace)
+        elif automaton_type == 'regex':
+            accepted = simulate_regex(automaton_data, input_string)
+            steps = generate_simulation_steps_regex(automaton_data, input_string, accepted)
+        elif automaton_type == 'pumping':
+            accepted = simulate_pumping_lemma(automaton_data, input_string)
+            steps = generate_simulation_steps_pumping(automaton_data, input_string, accepted)
         else:
             return SimulationResult(
                 accepted=False,
@@ -1352,6 +1622,103 @@ def generate_python_code(automaton_data: Dict[str, Any], options: CodeExportOpti
 
 '''
 
+
+def generate_simulation_steps_pda(automaton: Any, input_string: str, path: list[str], stack_trace: list[str]) -> list[SimulationStep]:
+    """Generate simulation steps for PDA"""
+    steps = []
+    for i, (step_desc, stack_state) in enumerate(zip(path, stack_trace + [""])):
+        steps.append(SimulationStep(
+            step_number=i,
+            current_state=extract_state_from_path(step_desc),
+            input_position=i,
+            action_description=step_desc,
+            stack_contents=parse_stack_contents(stack_state) if stack_state else [],
+            tape_contents=[],
+            head_position=0
+        ))
+    return steps
+
+def generate_simulation_steps_cfg(automaton: Any, input_string: str, parse_info: Any) -> list[SimulationStep]:
+    """Generate simulation steps for CFG"""
+    steps = []
+    if parse_info and 'derivation' in parse_info:
+        for i, derivation_step in enumerate(parse_info['derivation']):
+            steps.append(SimulationStep(
+                step_number=i,
+                current_state="parsing",
+                input_position=i,
+                action_description=derivation_step,
+                stack_contents=[],
+                tape_contents=[],
+                head_position=0
+            ))
+    return steps
+
+def generate_simulation_steps_tm(automaton: Any, input_string: str, path: list[str], tape_trace: list[str]) -> list[SimulationStep]:
+    """Generate simulation steps for TM"""
+    steps = []
+    for i, (step_desc, tape_state) in enumerate(zip(path, tape_trace + [""])):
+        tape_contents, head_pos = parse_tape_contents(tape_state) if tape_state else ([], 0)
+        steps.append(SimulationStep(
+            step_number=i,
+            current_state=extract_state_from_path(step_desc),
+            input_position=i,
+            action_description=step_desc,
+            stack_contents=[],
+            tape_contents=tape_contents,
+            head_position=head_pos
+        ))
+    return steps
+
+def generate_simulation_steps_regex(automaton: Any, input_string: str, accepted: bool) -> list[SimulationStep]:
+    """Generate simulation steps for Regex"""
+    return [SimulationStep(
+        step_number=0,
+        current_state="matching",
+        input_position=len(input_string),
+        action_description=f"Pattern {'matches' if accepted else 'does not match'} input string",
+        stack_contents=[],
+        tape_contents=[],
+        head_position=0
+    )]
+
+def generate_simulation_steps_pumping(automaton: Any, input_string: str, accepted: bool) -> list[SimulationStep]:
+    """Generate simulation steps for Pumping Lemma"""
+    return [SimulationStep(
+        step_number=0,
+        current_state="verifying",
+        input_position=len(input_string),
+        action_description=f"Pumping lemma {'satisfied' if accepted else 'violated'} for input string",
+        stack_contents=[],
+        tape_contents=[],
+        head_position=0
+    )]
+
+def extract_state_from_path(step_desc: str) -> str:
+    """Extract state name from step description"""
+    import re
+    match = re.search(r'state (\w+)', step_desc)
+    return match.group(1) if match else "unknown"
+
+def parse_stack_contents(stack_state: str) -> list[str]:
+    """Parse stack contents from trace string"""
+    if "Stack:" in stack_state:
+        stack_str = stack_state.split("Stack:")[1].strip()
+        try:
+            return eval(stack_str) if stack_str.startswith('[') else []
+        except:
+            return []
+    return []
+
+def parse_tape_contents(tape_state: str) -> tuple[list[str], int]:
+    """Parse tape contents and head position from trace string"""
+    if "Tape:" in tape_state and "Head:" in tape_state:
+        parts = tape_state.split(", Head:")
+        tape_str = parts[0].split("Tape:")[1].strip()
+        head_pos = int(parts[1].strip()) if len(parts) > 1 else 0
+        return list(tape_str), head_pos
+    return [], 0
+
 def generate_javascript_code(automaton_data: Dict[str, Any], options: CodeExportOptions) -> str:
     """Generate JavaScript code for automaton"""
     if options.format == "class":
@@ -1419,6 +1786,8 @@ def generate_java_code(automaton_data: Dict[str, Any], options: CodeExportOption
     return f'''import java.util.*;
 
 public class DFA {{
+
+
     private List<String> states;
     private List<String> alphabet;
     private List<Map<String, String>> transitions;

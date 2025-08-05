@@ -10,10 +10,10 @@ import { AIAssistantPanel } from './AIAssistantPanel';
 import { SimulationEngine } from './SimulationEngine';
 import { CodeExporter } from './CodeExporter';
 import { AutomataInspector } from './AutomataInspector';
-// import { LearningMode } from './LearningMode';
+import { LearningMode } from './LearningMode';
 import { ProjectManager } from './ProjectManager';
-// import { ExampleGallery } from './ExampleGallery';
-// import { ProofAssistant } from './ProofAssistant';
+import { ExampleGallery } from './ExampleGallery';
+import { ProofAssistant } from './ProofAssistant';
 const apiService = {
   validateSolution: async (problemId: string, solution: any) => {
     const response = await fetch(`/api/problems/${problemId}/validate`, {
@@ -309,10 +309,12 @@ export const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> =
               
               <TabsContent value="learn" className="mt-4">
                 <div className="h-[600px]">
-                  <div className="p-8 text-center text-gray-500">
-                    <h3 className="text-lg font-medium mb-2">Learning Mode</h3>
-                    <p>Interactive learning features coming soon!</p>
-                  </div>
+                  <LearningMode
+                    automaton={automaton}
+                    automatonType={problem.type}
+                    onAutomatonChange={handleAutomatonChange}
+                    currentProblem={problem}
+                  />
                 </div>
               </TabsContent>
               
@@ -323,10 +325,9 @@ export const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> =
                     currentAutomaton={automaton}
                     onAutomatonGenerated={handleAutomatonChange}
                   />
-                  <div className="p-8 text-center text-gray-500">
-                    <h3 className="text-lg font-medium mb-2">Proof Assistant</h3>
-                    <p>AI-powered proof validation coming soon!</p>
-                  </div>
+                  <ProofAssistant
+                    automaton={automaton}
+                  />
                 </div>
               </TabsContent>
             </Tabs>
@@ -382,10 +383,9 @@ export const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> =
               }}
             />
 
-            <div className="p-8 text-center text-gray-500">
-              <h3 className="text-lg font-medium mb-2">Example Gallery</h3>
-              <p>Pre-built automata examples coming soon!</p>
-            </div>
+            <ExampleGallery
+              onLoadExample={handleAutomatonChange}
+            />
             
             {problem.hints && problem.hints.length > 0 && (
               <Card>
