@@ -88,6 +88,10 @@ const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [activeTab, setActiveTab] = useState('canvas');
+  const [isGeneratingComplete, setIsGeneratingComplete] = useState(false);
+  const [isGeneratingGuided, setIsGeneratingGuided] = useState(false);
+  const [completeSolution, setCompleteSolution] = useState<any>(null);
+  const [guidedSteps, setGuidedSteps] = useState<string[]>([]);
 
   const handleAutomatonChange = (newAutomaton: ExtendedAutomaton) => {
     console.log('Loading new automaton:', newAutomaton);
@@ -108,6 +112,51 @@ const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
       console.error('Validation error:', error);
     } finally {
       setIsValidating(false);
+    }
+  };
+
+  const handleCompleteSolution = async () => {
+    setIsGeneratingComplete(true);
+    try {
+      const response = await fetch('/api/complete-solution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task: problem.description,
+          problem_type: problem.type,
+          problem_id: problem.id
+        })
+      });
+      const result = await response.json();
+      setCompleteSolution(result);
+      if (result.automaton) {
+        handleAutomatonChange(result.automaton);
+      }
+    } catch (error) {
+      console.error('Complete solution error:', error);
+    } finally {
+      setIsGeneratingComplete(false);
+    }
+  };
+
+  const handleGuidedApproach = async () => {
+    setIsGeneratingGuided(true);
+    try {
+      const response = await fetch('/api/guided-approach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task: problem.description,
+          problem_type: problem.type,
+          current_progress: automaton
+        })
+      });
+      const result = await response.json();
+      setGuidedSteps(result.steps || []);
+    } catch (error) {
+      console.error('Guided approach error:', error);
+    } finally {
+      setIsGeneratingGuided(false);
     }
   };
 
@@ -182,6 +231,41 @@ const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
             
             <div className="flex gap-2">
               <Button
+                onClick={handleCompleteSolution}
+                disabled={isGeneratingComplete}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isGeneratingComplete ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-4 h-4 mr-2" />
+                    Complete Solution
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleGuidedApproach}
+                disabled={isGeneratingGuided}
+                variant="outline"
+                className="border-blue-600 text-blue-600 hover:bg-blue-50"
+              >
+                {isGeneratingGuided ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Guided Approach
+                  </>
+                )}
+              </Button>
+              <Button
                 onClick={handleValidate}
                 disabled={isValidating}
                 className="bg-green-600 hover:bg-green-700"
@@ -234,6 +318,44 @@ const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
                 <p className="text-sm text-gray-700">{validationResult.ai_explanation}</p>
               </div>
             )}
+          </div>
+        )}
+
+        {completeSolution && (
+          <div className="mb-6 p-4 rounded-lg border bg-blue-50 border-blue-200">
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-blue-800">Complete Solution Generated</span>
+            </div>
+            {completeSolution.explanation && (
+              <div className="mt-3 p-3 bg-white rounded border">
+                <h4 className="font-medium text-gray-900 mb-1">AI Explanation:</h4>
+                <p className="text-sm text-gray-700">{completeSolution.explanation}</p>
+              </div>
+            )}
+            {completeSolution.formal_definition && (
+              <div className="mt-3 p-3 bg-white rounded border">
+                <h4 className="font-medium text-gray-900 mb-1">Formal Definition:</h4>
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap">{completeSolution.formal_definition}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {guidedSteps.length > 0 && (
+          <div className="mb-6 p-4 rounded-lg border bg-yellow-50 border-yellow-200">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-5 h-5 text-yellow-600" />
+              <span className="font-medium text-yellow-800">Guided Approach</span>
+            </div>
+            <div className="space-y-2">
+              {guidedSteps.map((step, index) => (
+                <div key={index} className="p-2 bg-white rounded border">
+                  <span className="text-sm font-medium text-gray-900">Step {index + 1}:</span>
+                  <p className="text-sm text-gray-700 mt-1">{step}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
