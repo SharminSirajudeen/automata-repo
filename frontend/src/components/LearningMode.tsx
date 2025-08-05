@@ -4,23 +4,25 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { HelpCircle, Lightbulb, AlertCircle, BookOpen, Target } from 'lucide-react';
-import { AutomataType } from '../types/automata';
+import { ExtendedAutomaton, AutomataType, Problem } from '../types/automata';
 
 interface LearningModeProps {
+  automaton: ExtendedAutomaton;
   automatonType: AutomataType;
-  isEnabled: boolean;
-  onToggle: (enabled: boolean) => void;
-  onHintRequest: () => void;
-  onStepGuidance: () => void;
+  onAutomatonChange: (automaton: ExtendedAutomaton) => void;
+  currentProblem: Problem;
 }
 
 export const LearningMode: React.FC<LearningModeProps> = ({
+  automaton,
   automatonType,
-  isEnabled,
-  onToggle,
-  onHintRequest,
-  onStepGuidance
+  onAutomatonChange,
+  currentProblem
 }) => {
+  const [isEnabled, setIsEnabled] = useState(true);
+  const onToggle = (enabled: boolean) => setIsEnabled(enabled);
+  const onHintRequest = () => setCurrentHint("Consider the problem requirements and current automaton structure.");
+  const onStepGuidance = () => setCurrentHint("Follow the step-by-step guidance above for this automaton type.");
   const [currentHint, setCurrentHint] = useState<string | null>(null);
 
   const getAutomataExplanations = () => {
