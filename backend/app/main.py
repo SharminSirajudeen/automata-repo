@@ -1487,18 +1487,48 @@ async def simulate_automaton_endpoint(request: Dict[str, Any]):
         elif automaton_type == 'pda':
             accepted, path, stack_trace = simulate_pda(automaton_data, input_string)
             steps = generate_simulation_steps_pda(automaton_data, input_string, path, stack_trace)
+            return SimulationResult(
+                accepted=accepted,
+                steps=steps,
+                final_state=path[-1] if path else "",
+                execution_path=path
+            )
         elif automaton_type == 'cfg':
             accepted, parse_info = simulate_cfg(automaton_data, input_string)
             steps = generate_simulation_steps_cfg(automaton_data, input_string, parse_info)
+            return SimulationResult(
+                accepted=accepted,
+                steps=steps,
+                final_state="parsed" if accepted else "failed",
+                execution_path=parse_info.get('derivation', []) if parse_info else []
+            )
         elif automaton_type == 'tm':
             accepted, path, tape_trace = simulate_tm(automaton_data, input_string)
             steps = generate_simulation_steps_tm(automaton_data, input_string, path, tape_trace)
+            return SimulationResult(
+                accepted=accepted,
+                steps=steps,
+                final_state=path[-1] if path else "",
+                execution_path=path
+            )
         elif automaton_type == 'regex':
             accepted = simulate_regex(automaton_data, input_string)
             steps = generate_simulation_steps_regex(automaton_data, input_string, accepted)
+            return SimulationResult(
+                accepted=accepted,
+                steps=steps,
+                final_state="matched" if accepted else "no_match",
+                execution_path=[f"Pattern {'matches' if accepted else 'does not match'} input"]
+            )
         elif automaton_type == 'pumping':
             accepted = simulate_pumping_lemma(automaton_data, input_string)
             steps = generate_simulation_steps_pumping(automaton_data, input_string, accepted)
+            return SimulationResult(
+                accepted=accepted,
+                steps=steps,
+                final_state="satisfied" if accepted else "violated",
+                execution_path=[f"Pumping lemma {'satisfied' if accepted else 'violated'}"]
+            )
         else:
             return SimulationResult(
                 accepted=False,
