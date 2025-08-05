@@ -5,6 +5,7 @@ import json
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_GENERATOR_MODEL = "codellama:34b"  # For code generation and formal definitions
 OLLAMA_EXPLAINER_MODEL = "deepseek-coder:33b"  # For explanations and educational reasoning
+OLLAMA_VISION_MODEL = "llava:34b"  # For image processing and OCR
 
 class AutomataGenerator:
     """Uses codellama:34b for formal automata generation and code"""
@@ -50,7 +51,7 @@ Format your response as JSON with keys: formal_definition, python_code, dot_grap
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=120.0
+                    timeout=25.0
                 )
                 
                 if response.status_code == 200:
@@ -80,6 +81,199 @@ Format your response as JSON with keys: formal_definition, python_code, dot_grap
             "dot_graph": "// DOT graph generation temporarily unavailable",
             "test_cases": {"accept": ["example1"], "reject": ["example2"]}
         }
+    
+    async def is_toc_problem(self, problem_text: str, problem_type: str = "text") -> bool:
+        """Determine if the input is a Theory of Computation problem"""
+        if problem_type == "image":
+            return True
+            
+        prompt = f"""
+        Analyze this text to determine if it's a Theory of Computation problem:
+        
+        Text: {problem_text}
+        
+        Return only "YES" if this is related to:
+        - Automata (DFA, NFA, PDA, Turing Machines)
+        - Formal languages and grammars
+        - Regular expressions
+        - Computability theory
+        - Pumping lemma
+        - Language equivalence or minimization
+        
+        Return "NO" if it's about other computer science topics or not CS-related.
+        """
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": OLLAMA_GENERATOR_MODEL,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    ai_response = result.get("response", "").strip().upper()
+                    return "YES" in ai_response
+                else:
+                    return True
+                    
+        except Exception as e:
+            return True
+    
+    async def analyze_problem_text(self, problem_text: str, problem_type: str = "text") -> Dict[str, Any]:
+        """Analyze problem text and generate complete solution"""
+        if problem_type == "image":
+            return await self._process_image_problem(problem_text)
+        
+        prompt = f"""
+        Analyze this Theory of Computation problem and provide a complete analysis:
+        
+        Problem: {problem_text}
+        
+        Please provide a JSON response with:
+        {{
+            "automaton_type": "dfa|nfa|pda|cfg|tm|regex|pumping",
+            "description": "Clear problem statement",
+            "difficulty": "beginner|intermediate|advanced",
+            "concepts": ["list", "of", "key", "concepts"],
+            "solution": {{
+                "formal_definition": "5-tuple or formal definition",
+                "python_code": "Complete implementation",
+                "dot_graph": "Graphviz DOT code",
+                "explanation": "Step-by-step explanation"
+            }},
+            "guided_steps": [
+                "Step 1: Understand the language",
+                "Step 2: Identify states needed",
+                "Step 3: Define transitions",
+                "Step 4: Mark accept states",
+                "Step 5: Test with examples"
+            ],
+            "test_cases": {{
+                "accept": ["string1", "string2"],
+                "reject": ["string3", "string4"]
+            }}
+        }}
+        """
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": OLLAMA_GENERATOR_MODEL,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=25.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    ai_response = result.get("response", "")
+                    
+                    try:
+                        return json.loads(ai_response)
+                    except json.JSONDecodeError:
+                        return self._fallback_problem_analysis(problem_text)
+                else:
+                    return self._fallback_problem_analysis(problem_text)
+                    
+        except Exception as e:
+            return self._fallback_problem_analysis(problem_text)
+    
+    async def _process_image_problem(self, base64_image: str) -> Dict[str, Any]:
+        """Process image using llava:34b to extract TOC problem"""
+        prompt = """
+        Analyze this image and extract any Theory of Computation problem you can find.
+        
+        Look for:
+        - Problem statements about automata (DFA, NFA, PDA, TM)
+        - Language definitions
+        - Regular expressions
+        - Grammar rules
+        - Pumping lemma problems
+        
+        If you find a TOC problem, provide a JSON response with:
+        {
+            "automaton_type": "dfa|nfa|pda|cfg|tm|regex|pumping",
+            "description": "Extracted problem statement",
+            "difficulty": "beginner|intermediate|advanced",
+            "concepts": ["list", "of", "key", "concepts"],
+            "solution": {
+                "formal_definition": "5-tuple or formal definition",
+                "python_code": "Complete implementation",
+                "dot_graph": "Graphviz DOT code",
+                "explanation": "Step-by-step explanation"
+            },
+            "guided_steps": [
+                "Step 1: Understand the language",
+                "Step 2: Identify states needed",
+                "Step 3: Define transitions",
+                "Step 4: Mark accept states",
+                "Step 5: Test with examples"
+            ],
+            "test_cases": {
+                "accept": ["string1", "string2"],
+                "reject": ["string3", "string4"]
+            }
+        }
+        
+        If no TOC problem is found, return: {"error": "No Theory of Computation problem found in image"}
+        """
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": OLLAMA_VISION_MODEL,
+                        "prompt": prompt,
+                        "images": [base64_image.split(',')[1] if ',' in base64_image else base64_image],
+                        "stream": False
+                    },
+                    timeout=30.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    ai_response = result.get("response", "")
+                    
+                    try:
+                        parsed_result = json.loads(ai_response)
+                        if "error" in parsed_result:
+                            return self._fallback_problem_analysis("Image analysis failed")
+                        return parsed_result
+                    except json.JSONDecodeError:
+                        return self._fallback_problem_analysis("Image contains TOC problem but parsing failed")
+                else:
+                    return self._fallback_problem_analysis("Image processing failed")
+                    
+        except Exception as e:
+            return self._fallback_problem_analysis(f"Image processing error: {str(e)}")
+    
+    def _fallback_problem_analysis(self, problem_text: str) -> Dict[str, Any]:
+        """Fallback problem analysis when AI is unavailable"""
+        return {
+            "automaton_type": "dfa",
+            "description": problem_text,
+            "difficulty": "intermediate",
+            "concepts": ["automata", "formal-languages"],
+            "solution": self._fallback_response(problem_text, "dfa"),
+            "guided_steps": [
+                "Step 1: Identify the language to be recognized",
+                "Step 2: Determine what information needs to be tracked",
+                "Step 3: Design states to represent this information",
+                "Step 4: Define transitions between states",
+                "Step 5: Mark appropriate accept states"
+            ],
+            "test_cases": {"accept": ["example"], "reject": ["counter-example"]}
+        }
 
     async def generate_proof_steps(self, automaton_data: Dict[str, Any], proof_type: str, current_steps: List[Dict]) -> Dict[str, Any]:
         """Generate proof step suggestions"""
@@ -105,7 +299,7 @@ Format your response as JSON with keys: formal_definition, python_code, dot_grap
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=120.0
+                    timeout=25.0
                 )
                 
                 if response.status_code == 200:
@@ -191,7 +385,7 @@ Be encouraging, clear, and pedagogically sound. Use analogies where helpful.
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=90.0
+                    timeout=15.0
                 )
                 
                 if response.status_code == 200:
@@ -242,7 +436,7 @@ Format: "Next step: [specific action]"
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=30.0
+                    timeout=10.0
                 )
                 
                 if response.status_code == 200:
@@ -310,7 +504,7 @@ Format: "Next step: [specific action]"
                         "prompt": prompt,
                         "stream": False
                     },
-                    timeout=90.0
+                    timeout=15.0
                 )
                 
                 if response.status_code == 200:

@@ -21,9 +21,16 @@ export const LearningMode: React.FC<LearningModeProps> = ({
 }) => {
   const [isEnabled, setIsEnabled] = useState(true);
   const onToggle = (enabled: boolean) => setIsEnabled(enabled);
-  const onHintRequest = () => setCurrentHint("Consider the problem requirements and current automaton structure.");
+  const onHintRequest = () => setCurrentHint(`Consider the problem requirements and current automaton structure. Problem: ${currentProblem?.title || 'Unknown'}`);
   const onStepGuidance = () => setCurrentHint("Follow the step-by-step guidance above for this automaton type.");
   const [currentHint, setCurrentHint] = useState<string | null>(null);
+  
+  const hasAutomaton = automaton && (
+    ('states' in automaton && automaton.states && automaton.states.length > 0) ||
+    ('productions' in automaton && automaton.productions && automaton.productions.length > 0) ||
+    ('transitions' in automaton && automaton.transitions && automaton.transitions.length > 0)
+  );
+  const canModifyAutomaton = onAutomatonChange !== undefined;
 
   const getAutomataExplanations = () => {
     const explanations: { [key in AutomataType]: { [key: string]: string } } = {
@@ -247,8 +254,9 @@ export const LearningMode: React.FC<LearningModeProps> = ({
                   variant="outline" 
                   className="w-full"
                   size="sm"
+                  disabled={!hasAutomaton}
                 >
-                  Request Hint
+                  Request Hint {hasAutomaton ? '' : '(No Automaton)'}
                 </Button>
                 {currentHint && (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
@@ -283,7 +291,7 @@ export const LearningMode: React.FC<LearningModeProps> = ({
                   className="w-full" 
                   size="sm"
                   onClick={() => {
-                    setCurrentHint("Check if all states are reachable from the start state.");
+                    setCurrentHint(`Check if all states are reachable from the start state. ${canModifyAutomaton ? 'You can modify the automaton if needed.' : ''}`);
                   }}
                 >
                   <AlertCircle className="w-4 h-4 mr-2" />

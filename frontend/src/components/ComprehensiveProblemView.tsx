@@ -533,4 +533,4 @@ const ComprehensiveProblemView: React.FC<ComprehensiveProblemViewProps> = ({
   );
 };
 
-export { ComprehensiveProblemView };
+export default ComprehensiveProblemView;
