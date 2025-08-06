@@ -25,7 +25,7 @@ function App() {
     setIsProcessingProblem(true);
     
     try {
-      const response = await fetch('http://localhost:8000/api/analyze-problem', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/analyze-problem`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
