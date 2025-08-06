@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "automata-app.fullname" . }}-config
+  namespace: {{ include "automata-app.namespace" . }}
+  labels:
+    {{- include "automata-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config
+data:
+  # Application configuration
+  corsOrigins: {{ .Values.config.corsOrigins | quote }}
+  logLevel: {{ .Values.config.logLevel | quote }}
+  
+  # CDN configuration
+  cdnEnabled: {{ .Values.config.cdnEnabled | quote }}
+  cdnBaseUrl: {{ .Values.config.cdnBaseUrl | quote }}
+  
+  # Performance settings
+  poolSize: {{ .Values.config.poolSize | quote }}
+  maxOverflow: {{ .Values.config.maxOverflow | quote }}
+  poolTimeout: {{ .Values.config.poolTimeout | quote }}
+  
+  # Monitoring
+  enableMetrics: {{ .Values.config.enableMetrics | quote }}
+  metricsPort: {{ .Values.config.metricsPort | quote }}
+
+---
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "automata-app.fullname" . }}-nginx-config
+  namespace: {{ include "automata-app.namespace" . }}
+  labels:
+    {{- include "automata-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+data:
+  default.conf: |
+    upstream backend {
+        least_conn;
+        server {{ include "automata-app.fullname" . }}-backend:{{ .Values.backend.service.port }} max_fails=3 fail_timeout=30s;
+        keepalive 32;
+    }
+    
+    server {
+        listen 80;
+        server_name _;
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1000;
+        gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/xml+rss
+            application/javascript
+            application/json
+            image/svg+xml;
+        
+        # Static files with long cache
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header Vary "Accept-Encoding";
+        }
+        
+        # API routes
+        location /api/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Connection settings
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+            
+            # Buffer settings
+            proxy_buffering on;
+            proxy_buffer_size 4k;
+            proxy_buffers 8 4k;
+            proxy_busy_buffers_size 8k;
+        }
+        
+        # WebSocket support
+        location /ws/ {
+            proxy_pass http://backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # Health check
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Frontend SPA
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+            add_header Pragma "no-cache";
+            add_header Expires "0";
+        }
+    }
+{{- end }}

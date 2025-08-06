@@ -10,6 +10,9 @@ import uuid
 from .config import settings
 from typing import Generator
 
+# Note: Additional models are defined in api_platform.py and automated_grading.py
+# They import Base from here to avoid circular imports
+
 # Create database engine
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

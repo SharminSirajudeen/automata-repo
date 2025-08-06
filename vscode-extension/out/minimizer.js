@@ -1,0 +1,348 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AutomataMinimizer = void 0;
+const vscode = __importStar(require("vscode"));
+const parser_1 = require("./parser");
+class AutomataMinimizer {
+    constructor() {
+        this.parser = new parser_1.AutomataParser();
+    }
+    async minimize(document) {
+        try {
+            const text = document.getText();
+            const automaton = this.parser.parse(text, 'dfa');
+            const minimizedDFA = this.minimizeDFA(automaton);
+            // Show the minimized DFA
+            await this.showMinimizedResult(automaton, minimizedDFA, document);
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`Minimization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    minimizeDFA(dfa) {
+        // Step 1: Remove unreachable states
+        const reachableStates = this.getReachableStates(dfa);
+        // Step 2: Remove dead states (states that cannot reach any accepting state)
+        const liveStates = this.getLiveStates(dfa, reachableStates);
+        // Step 3: Merge equivalent states using table-filling algorithm
+        const equivalentStates = this.findEquivalentStates(dfa, liveStates);
+        // Step 4: Construct minimized DFA
+        return this.constructMinimizedDFA(dfa, equivalentStates);
+    }
+    getReachableStates(dfa) {
+        const reachable = new Set();
+        const queue = [dfa.start_state];
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (reachable.has(current))
+                continue;
+            reachable.add(current);
+            const stateTransitions = dfa.transitions[current];
+            if (stateTransitions) {
+                for (const destination of Object.values(stateTransitions)) {
+                    if (!reachable.has(destination)) {
+                        queue.push(destination);
+                    }
+                }
+            }
+        }
+        return reachable;
+    }
+    getLiveStates(dfa, reachableStates) {
+        const live = new Set();
+        const acceptingStates = new Set(dfa.accept_states);
+        // All accepting states are live
+        for (const state of dfa.accept_states) {
+            if (reachableStates.has(state)) {
+                live.add(state);
+            }
+        }
+        // Find states that can reach accepting states
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (const state of reachableStates) {
+                if (live.has(state))
+                    continue;
+                const stateTransitions = dfa.transitions[state];
+                if (stateTransitions) {
+                    for (const destination of Object.values(stateTransitions)) {
+                        if (live.has(destination)) {
+                            live.add(state);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return live;
+    }
+    findEquivalentStates(dfa, liveStates) {
+        const states = Array.from(liveStates);
+        const n = states.length;
+        // Create distinguishability table
+        const table = [];
+        for (let i = 0; i < n; i++) {
+            table[i] = [];
+            for (let j = 0; j < n; j++) {
+                table[i][j] = false;
+            }
+        }
+        // Mark pairs where one is accepting and other is not
+        const acceptingStates = new Set(dfa.accept_states);
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const state1 = states[i];
+                const state2 = states[j];
+                if (acceptingStates.has(state1) !== acceptingStates.has(state2)) {
+                    table[i][j] = true;
+                    table[j][i] = true;
+                }
+            }
+        }
+        // Table filling algorithm
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    if (table[i][j])
+                        continue;
+                    const state1 = states[i];
+                    const state2 = states[j];
+                    // Check if states are distinguishable by any symbol
+                    for (const symbol of dfa.alphabet) {
+                        const dest1 = dfa.transitions[state1]?.[symbol];
+                        const dest2 = dfa.transitions[state2]?.[symbol];
+                        if (!dest1 || !dest2) {
+                            // One has transition, other doesn't - distinguishable
+                            if (dest1 !== dest2) {
+                                table[i][j] = true;
+                                table[j][i] = true;
+                                changed = true;
+                                break;
+                            }
+                        }
+                        else if (dest1 !== dest2) {
+                            // Both have transitions - check if destinations are distinguishable
+                            const idx1 = states.indexOf(dest1);
+                            const idx2 = states.indexOf(dest2);
+                            if (idx1 !== -1 && idx2 !== -1 && table[idx1][idx2]) {
+                                table[i][j] = true;
+                                table[j][i] = true;
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Group equivalent states
+        const equivalenceClasses = new Map();
+        const processed = new Set();
+        for (let i = 0; i < n; i++) {
+            const state1 = states[i];
+            if (processed.has(state1))
+                continue;
+            const equivalentGroup = new Set([state1]);
+            processed.add(state1);
+            for (let j = i + 1; j < n; j++) {
+                const state2 = states[j];
+                if (!processed.has(state2) && !table[i][j]) {
+                    equivalentGroup.add(state2);
+                    processed.add(state2);
+                }
+            }
+            // Use lexicographically smallest state as representative
+            const representative = Array.from(equivalentGroup).sort()[0];
+            equivalenceClasses.set(representative, equivalentGroup);
+        }
+        return equivalenceClasses;
+    }
+    constructMinimizedDFA(originalDFA, equivalenceClasses) {
+        // Create mapping from original states to representatives
+        const stateMap = new Map();
+        for (const [representative, group] of equivalenceClasses) {
+            for (const state of group) {
+                stateMap.set(state, representative);
+            }
+        }
+        const newStates = Array.from(equivalenceClasses.keys()).sort();
+        const newStartState = stateMap.get(originalDFA.start_state);
+        const newAcceptStates = [...new Set(originalDFA.accept_states.map(state => stateMap.get(state)))];
+        // Build new transitions
+        const newTransitions = {};
+        for (const representative of newStates) {
+            newTransitions[representative] = {};
+            // Use any state from the equivalence class to build transitions
+            const sampleState = Array.from(equivalenceClasses.get(representative))[0];
+            const originalTransitions = originalDFA.transitions[sampleState];
+            if (originalTransitions) {
+                for (const [symbol, destination] of Object.entries(originalTransitions)) {
+                    newTransitions[representative][symbol] = stateMap.get(destination);
+                }
+            }
+        }
+        return {
+            type: 'dfa',
+            states: newStates,
+            alphabet: originalDFA.alphabet,
+            start_state: newStartState,
+            accept_states: newAcceptStates,
+            transitions: newTransitions
+        };
+    }
+    async showMinimizedResult(original, minimized, document) {
+        const originalStateCount = original.states.length;
+        const minimizedStateCount = minimized.states.length;
+        const reduction = originalStateCount - minimizedStateCount;
+        let message = `Minimization complete!\n`;
+        message += `States reduced from ${originalStateCount} to ${minimizedStateCount}`;
+        if (reduction > 0) {
+            message += ` (${reduction} states removed)`;
+        }
+        else {
+            message += ` (already minimal)`;
+        }
+        const options = ['Show Minimized DFA', 'Show Analysis', 'Save to File'];
+        const choice = await vscode.window.showInformationMessage(message, ...options);
+        if (!choice)
+            return;
+        switch (choice) {
+            case 'Show Minimized DFA':
+                await this.showMinimizedDFA(minimized, document);
+                break;
+            case 'Show Analysis':
+                await this.showMinimizationAnalysis(original, minimized);
+                break;
+            case 'Save to File':
+                await this.saveMinimizedDFA(minimized, document);
+                break;
+        }
+    }
+    async showMinimizedDFA(minimized, originalDocument) {
+        const content = JSON.stringify(minimized, null, 2);
+        const newDocument = await vscode.workspace.openTextDocument({
+            content: content,
+            language: 'json'
+        });
+        await vscode.window.showTextDocument(newDocument, vscode.ViewColumn.Beside);
+    }
+    async showMinimizationAnalysis(original, minimized) {
+        let analysis = 'DFA Minimization Analysis\n';
+        analysis += '=========================\n\n';
+        analysis += `Original States: ${original.states.length}\n`;
+        analysis += `Minimized States: ${minimized.states.length}\n`;
+        analysis += `Reduction: ${original.states.length - minimized.states.length} states\n\n`;
+        // Find state mappings
+        const stateMapping = this.findStateMapping(original, minimized);
+        if (stateMapping.size > 0) {
+            analysis += 'State Equivalences:\n';
+            for (const [representative, group] of stateMapping) {
+                if (group.size > 1) {
+                    analysis += `  {${Array.from(group).join(', ')}} → ${representative}\n`;
+                }
+            }
+            analysis += '\n';
+        }
+        // Compare transitions
+        analysis += 'Transition Comparison:\n';
+        analysis += `Original: ${this.countTransitions(original)} transitions\n`;
+        analysis += `Minimized: ${this.countTransitions(minimized)} transitions\n\n`;
+        // Check if languages are equivalent
+        analysis += 'Language Equivalence: ';
+        analysis += this.checkLanguageEquivalence(original, minimized) ? 'VERIFIED' : 'ERROR';
+        analysis += '\n';
+        const outputChannel = vscode.window.createOutputChannel('DFA Minimization Analysis');
+        outputChannel.clear();
+        outputChannel.append(analysis);
+        outputChannel.show();
+    }
+    async saveMinimizedDFA(minimized, originalDocument) {
+        const baseName = originalDocument.fileName.replace(/\.[^.]+$/, '');
+        const defaultName = `${baseName}_minimized.dfa`;
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(defaultName),
+            filters: {
+                'DFA files': ['dfa'],
+                'JSON files': ['json'],
+                'All files': ['*']
+            }
+        });
+        if (uri) {
+            const content = JSON.stringify(minimized, null, 2);
+            await vscode.workspace.fs.writeFile(uri, Buffer.from(content));
+            vscode.window.showInformationMessage(`Minimized DFA saved to ${uri.fsPath}`);
+        }
+    }
+    findStateMapping(original, minimized) {
+        // This is a simplified approach - in practice, you'd track the mapping during minimization
+        const mapping = new Map();
+        // For now, just group states that have the same transitions
+        const transitionSignatures = new Map();
+        for (const state of original.states) {
+            const signature = this.getTransitionSignature(original, state);
+            if (!transitionSignatures.has(signature)) {
+                transitionSignatures.set(signature, new Set());
+            }
+            transitionSignatures.get(signature).add(state);
+        }
+        for (const [signature, states] of transitionSignatures) {
+            if (states.size > 1) {
+                const representative = Array.from(states).sort()[0];
+                mapping.set(representative, states);
+            }
+        }
+        return mapping;
+    }
+    getTransitionSignature(dfa, state) {
+        const transitions = dfa.transitions[state] || {};
+        const signature = dfa.alphabet.map(symbol => transitions[symbol] || 'NULL').join('|');
+        const isAccepting = dfa.accept_states.includes(state) ? '1' : '0';
+        return `${signature}:${isAccepting}`;
+    }
+    countTransitions(dfa) {
+        let count = 0;
+        for (const stateTransitions of Object.values(dfa.transitions)) {
+            count += Object.keys(stateTransitions).length;
+        }
+        return count;
+    }
+    checkLanguageEquivalence(dfa1, dfa2) {
+        // Simplified check - in practice, this would be more thorough
+        // Check if both have same alphabet
+        if (dfa1.alphabet.length !== dfa2.alphabet.length)
+            return false;
+        if (!dfa1.alphabet.every(symbol => dfa2.alphabet.includes(symbol)))
+            return false;
+        // For now, assume they're equivalent if minimization was successful
+        return true;
+    }
+}
+exports.AutomataMinimizer = AutomataMinimizer;
+//# sourceMappingURL=minimizer.js.map

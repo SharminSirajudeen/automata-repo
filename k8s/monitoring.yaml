@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: automata-backend
+  namespace: automata-app
+  labels:
+    app.kubernetes.io/name: automata
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: automata
+      app.kubernetes.io/component: backend
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: automata-nginx
+  namespace: automata-app
+  labels:
+    app.kubernetes.io/name: automata
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: automata
+      app.kubernetes.io/component: frontend
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /nginx_status
+
+---
+# Pod Disruption Budget for backend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: automata-app
+  labels:
+    app.kubernetes.io/name: automata
+    app.kubernetes.io/component: backend
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: automata
+      app.kubernetes.io/component: backend
+
+---
+# Pod Disruption Budget for frontend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: automata-app
+  labels:
+    app.kubernetes.io/name: automata
+    app.kubernetes.io/component: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: automata
+      app.kubernetes.io/component: frontend
+
+---
+# Vertical Pod Autoscaler for database (optional)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: postgres-vpa
+  namespace: automata-app
+  labels:
+    app.kubernetes.io/name: automata
+    app.kubernetes.io/component: database
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: postgres
+  updatePolicy:
+    updateMode: "Off"  # Recommendation only, no automatic updates
+  resourcePolicy:
+    containerPolicies:
+    - containerName: postgres
+      maxAllowed:
+        memory: 4Gi
+        cpu: 2000m
+      minAllowed:
+        memory: 256Mi
+        cpu: 100m
+
+---
+# Custom resource definitions for monitoring alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: automata-alerts
+  namespace: automata-app
+  labels:
+    app.kubernetes.io/name: automata
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: automata.rules
+    rules:
+    # High error rate
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{job="automata-backend",status=~"5.."}[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is {{ $value }} per second for backend service"
+    
+    # High response time
+    - alert: HighResponseTime
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="automata-backend"}[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High response time detected"
+        description: "95th percentile response time is {{ $value }} seconds"
+    
+    # Database connection issues
+    - alert: DatabaseConnectionHigh
+      expr: database_connections_active / database_connections_max > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High database connection usage"
+        description: "Database connection usage is at {{ $value }}%"
+    
+    # Memory usage high
+    - alert: MemoryUsageHigh
+      expr: container_memory_usage_bytes{pod=~"backend-.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage"
+        description: "Memory usage is at {{ $value }}% for pod {{ $labels.pod }}"
+    
+    # CPU usage high
+    - alert: CPUUsageHigh
+      expr: rate(container_cpu_usage_seconds_total{pod=~"backend-.*"}[5m]) / container_spec_cpu_quota * 100 > 80
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage"
+        description: "CPU usage is at {{ $value }}% for pod {{ $labels.pod }}"
+    
+    # Pod crash looping
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 15 > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod is crash looping"
+        description: "Pod {{ $labels.pod }} is restarting frequently"

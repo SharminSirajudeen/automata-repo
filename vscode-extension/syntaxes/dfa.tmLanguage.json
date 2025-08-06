@@ -1,0 +1,81 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "DFA",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#constants"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.dfa",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.dfa",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.dfa",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.dfa",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.dfa",
+          "match": "\\b(states|alphabet|start_state|accept_states|transitions|final_states)\\b"
+        },
+        {
+          "name": "storage.type.dfa",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.dfa",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.dfa",
+          "match": "\\b(epsilon|λ|ε)\\b"
+        },
+        {
+          "name": "entity.name.type.dfa",
+          "match": "\\bq[0-9]+\\b"
+        },
+        {
+          "name": "entity.name.function.dfa",
+          "match": "\\b(qaccept|qreject|qstart|qfinal)\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.automata.dfa"
+}

@@ -1,0 +1,46 @@
+apiVersion: v2
+name: automata-app
+description: A Helm chart for Automata Theory Learning Application
+
+# Chart metadata
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+# Maintainer information
+maintainers:
+  - name: Automata Team
+    email: team@automata.example.com
+
+# Keywords for discoverability
+keywords:
+  - education
+  - automata-theory
+  - computer-science
+  - ai-tutoring
+  - collaboration
+
+# Sources
+sources:
+  - https://github.com/automata/automata-app
+
+# Dependencies
+dependencies:
+  - name: postgresql
+    version: "11.9.13"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+    tags:
+      - database
+
+  - name: redis
+    version: "17.3.7"
+    repository: "https://charts.bitnami.com/bitnami" 
+    condition: redis.enabled
+    tags:
+      - cache
+
+# Annotations
+annotations:
+  category: Education
+  licenses: MIT

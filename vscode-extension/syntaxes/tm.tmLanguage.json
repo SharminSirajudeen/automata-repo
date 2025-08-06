@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Turing Machine",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#constants"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.tm",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.tm",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.tm",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.tm",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.tm",
+          "match": "\\b(states|alphabet|tape_alphabet|blank_symbol|start_state|accept_states|reject_states|transitions|final_states)\\b"
+        },
+        {
+          "name": "keyword.operator.tm",
+          "match": "\\b(state|write|move|L|R|S)\\b"
+        },
+        {
+          "name": "storage.type.tm",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.tm",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.tm",
+          "match": "\\b(epsilon|λ|ε|_)\\b"
+        },
+        {
+          "name": "entity.name.type.tm",
+          "match": "\\bq[0-9]+\\b"
+        },
+        {
+          "name": "entity.name.function.tm",
+          "match": "\\b(qaccept|qreject|qstart|qfinal|qhalt)\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.automata.tm"
+}

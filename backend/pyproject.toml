@@ -9,6 +9,11 @@ readme = "README.md"
 python = "^3.12"
 fastapi = {extras = ["standard"], version = "^0.116.1"}
 psycopg = {extras = ["binary"], version = "^3.2.9"}
+python-socketio = "^5.11.4"
+python-multipart = "^0.0.16"
+aiofiles = "^24.1.0"
+redis = "^5.0.8"
+pydantic-settings = "^2.5.2"
 
 
 [build-system]

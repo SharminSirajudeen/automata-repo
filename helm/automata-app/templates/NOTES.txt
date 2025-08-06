@@ -1,0 +1,64 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.frontend.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ include "automata-app.namespace" . }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "automata-app.fullname" . }}-frontend)
+  export NODE_IP=$(kubectl get nodes --namespace {{ include "automata-app.namespace" . }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.frontend.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ include "automata-app.namespace" . }} svc -w {{ include "automata-app.fullname" . }}-frontend'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ include "automata-app.namespace" . }} {{ include "automata-app.fullname" . }}-frontend --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.frontend.service.port }}
+{{- else if contains "ClusterIP" .Values.frontend.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ include "automata-app.namespace" . }} -l "app.kubernetes.io/name={{ include "automata-app.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=frontend" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ include "automata-app.namespace" . }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ include "automata-app.namespace" . }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+
+2. Check the status of your deployment:
+   kubectl get pods -n {{ include "automata-app.namespace" . }}
+
+3. View application logs:
+   kubectl logs -f deployment/{{ include "automata-app.fullname" . }}-backend -n {{ include "automata-app.namespace" . }}
+   kubectl logs -f deployment/{{ include "automata-app.fullname" . }}-frontend -n {{ include "automata-app.namespace" . }}
+
+4. Monitor application metrics:
+{{- if .Values.monitoring.enabled }}
+   kubectl port-forward svc/{{ include "automata-app.fullname" . }}-backend 9090:9090 -n {{ include "automata-app.namespace" . }}
+   # Visit http://localhost:9090/metrics for Prometheus metrics
+{{- end }}
+
+5. Database access:
+{{- if .Values.postgresql.enabled }}
+   kubectl port-forward svc/{{ include "automata-app.fullname" . }}-postgresql 5432:5432 -n {{ include "automata-app.namespace" . }}
+   # Connect using: postgresql://{{ .Values.postgresql.auth.username }}@localhost:5432/{{ .Values.postgresql.auth.database }}
+{{- end }}
+
+6. Redis access:
+{{- if .Values.redis.enabled }}
+   kubectl port-forward svc/{{ include "automata-app.fullname" . }}-redis-master 6379:6379 -n {{ include "automata-app.namespace" . }}
+   # Connect using: redis-cli -h localhost -p 6379
+{{- end }}
+
+{{- if not .Values.ingress.enabled }}
+WARNING: Ingress is not enabled. You'll need to expose the service manually or enable ingress.
+{{- end }}
+
+{{- if eq .Values.secrets.secretKey "changeme-super-secret-key-for-jwt-signing" }}
+WARNING: You are using default secret keys. Please update the secrets for production deployment!
+{{- end }}
+
+{{- if and .Values.postgresql.enabled (eq .Values.postgresql.auth.password "changeme-automata-password") }}
+WARNING: You are using default database password. Please update for production deployment!
+{{- end }}
+
+For more information about the Automata Theory Learning Application:
+- Documentation: https://docs.automata.example.com
+- Support: https://support.automata.example.com
+- Repository: https://github.com/automata/automata-app

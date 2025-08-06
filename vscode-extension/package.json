@@ -1,0 +1,240 @@
+{
+  "name": "automata-dev",
+  "displayName": "Automata Development",
+  "description": "Complete VS Code extension for developing and simulating finite automata, pushdown automata, and Turing machines",
+  "version": "1.0.0",
+  "publisher": "automata-dev",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "automata",
+    "dfa",
+    "nfa",
+    "turing machine",
+    "formal languages",
+    "computation theory"
+  ],
+  "activationEvents": [
+    "onLanguage:automata-dfa",
+    "onLanguage:automata-nfa",
+    "onLanguage:automata-tm",
+    "onCommand:automata.createDFA",
+    "onCommand:automata.createNFA",
+    "onCommand:automata.createTM"
+  ],
+  "main": "./out/extension-simple.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "automata-dfa",
+        "aliases": ["DFA", "Deterministic Finite Automaton"],
+        "extensions": [".dfa"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "automata-nfa",
+        "aliases": ["NFA", "Nondeterministic Finite Automaton"],
+        "extensions": [".nfa"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "automata-tm",
+        "aliases": ["TM", "Turing Machine"],
+        "extensions": [".tm"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "automata-dfa",
+        "scopeName": "source.automata.dfa",
+        "path": "./syntaxes/dfa.tmLanguage.json"
+      },
+      {
+        "language": "automata-nfa",
+        "scopeName": "source.automata.nfa",
+        "path": "./syntaxes/nfa.tmLanguage.json"
+      },
+      {
+        "language": "automata-tm",
+        "scopeName": "source.automata.tm",
+        "path": "./syntaxes/tm.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "automata.showPreview",
+        "title": "Show Automata Preview",
+        "category": "Automata",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "automata.simulate",
+        "title": "Simulate Automata",
+        "category": "Automata",
+        "icon": "$(play)"
+      },
+      {
+        "command": "automata.minimize",
+        "title": "Minimize DFA",
+        "category": "Automata",
+        "icon": "$(fold)"
+      },
+      {
+        "command": "automata.convert",
+        "title": "Convert Automata Format",
+        "category": "Automata",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "automata.validate",
+        "title": "Validate Automata",
+        "category": "Automata",
+        "icon": "$(check)"
+      },
+      {
+        "command": "automata.export",
+        "title": "Export Automata",
+        "category": "Automata",
+        "icon": "$(export)"
+      },
+      {
+        "command": "automata.testInput",
+        "title": "Test Input String",
+        "category": "Automata",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "automata.createDFA",
+        "title": "New DFA",
+        "category": "Automata"
+      },
+      {
+        "command": "automata.createNFA",
+        "title": "New NFA",
+        "category": "Automata"
+      },
+      {
+        "command": "automata.createTM",
+        "title": "New Turing Machine",
+        "category": "Automata"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'",
+          "command": "automata.showPreview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'",
+          "command": "automata.simulate",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "resourceExtname == '.dfa'",
+          "command": "automata.minimize",
+          "group": "automata"
+        },
+        {
+          "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'",
+          "command": "automata.convert",
+          "group": "automata"
+        },
+        {
+          "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'",
+          "command": "automata.testInput",
+          "group": "automata"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "automata.showPreview",
+          "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'"
+        },
+        {
+          "command": "automata.simulate",
+          "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'"
+        },
+        {
+          "command": "automata.minimize",
+          "when": "resourceExtname == '.dfa'"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "automata.showPreview",
+        "key": "ctrl+k v",
+        "mac": "cmd+k v",
+        "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'"
+      },
+      {
+        "command": "automata.simulate",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "resourceExtname == '.dfa' || resourceExtname == '.nfa' || resourceExtname == '.tm'"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Automata Development",
+      "properties": {
+        "automata.preview.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh preview when document changes"
+        },
+        "automata.simulation.speed": {
+          "type": "number",
+          "default": 1000,
+          "description": "Simulation speed in milliseconds per step"
+        },
+        "automata.validation.enableRealtime": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time validation"
+        },
+        "automata.export.format": {
+          "type": "string",
+          "enum": ["svg", "png", "json", "dot"],
+          "default": "svg",
+          "description": "Default export format"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.2",
+    "vscode-languageserver": "^8.0.2",
+    "vscode-languageserver-textdocument": "^1.0.7"
+  }
+}

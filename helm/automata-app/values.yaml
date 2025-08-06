@@ -1,0 +1,416 @@
+# Default values for automata-app
+# This is a YAML-formatted file with configuration values
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "fast-ssd"
+
+# Application configuration
+app:
+  name: automata-app
+  version: "1.0.0"
+  environment: production
+
+# Namespace configuration
+namespaceOverride: ""
+
+# Image configuration
+image:
+  registry: docker.io
+  repository: automata
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: ""
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Backend configuration
+backend:
+  enabled: true
+  replicaCount: 3
+  
+  image:
+    repository: automata/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    annotations: {}
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+        policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+        selectPolicy: Max
+  
+  # Probes
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+  
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  
+  # Node selector and affinity
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  # Environment variables
+  env:
+    LOG_LEVEL: INFO
+    POOL_SIZE: "20"
+    MAX_OVERFLOW: "30"
+    POOL_TIMEOUT: "30"
+    ENABLE_METRICS: "true"
+
+# Frontend configuration  
+frontend:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: automata/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+    annotations: {}
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 85
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 101  # nginx user
+    runAsGroup: 101
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+      add:
+      - NET_BIND_SERVICE
+  
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  
+  # Nginx configuration
+  nginx:
+    config: |
+      upstream backend {
+          least_conn;
+          server {{ .Values.backend.service.name }}:{{ .Values.backend.service.port }} max_fails=3 fail_timeout=30s;
+          keepalive 32;
+      }
+      
+      server {
+          listen 80;
+          server_name _;
+          
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+          
+          # Gzip compression
+          gzip on;
+          gzip_vary on;
+          gzip_min_length 1000;
+          gzip_types text/plain text/css text/xml text/javascript application/xml+rss application/javascript application/json image/svg+xml;
+          
+          location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+              expires 1y;
+              add_header Cache-Control "public, immutable";
+          }
+          
+          location /api/ {
+              proxy_pass http://backend;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+          }
+          
+          location / {
+              try_files $uri $uri/ /index.html;
+          }
+          
+          location /health {
+              access_log off;
+              return 200 "healthy\n";
+              add_header Content-Type text/plain;
+          }
+      }
+
+# PostgreSQL configuration (Bitnami chart)
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "changeme-postgres-password"
+    username: "automata"
+    password: "changeme-automata-password"  
+    database: "automata_db"
+  
+  architecture: standalone
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+    
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    
+    service:
+      ports:
+        postgresql: 5432
+
+# Redis configuration (Bitnami chart)
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  
+  architecture: standalone
+  
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
+    
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    
+    service:
+      ports:
+        redis: 6379
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/use-gzip: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  
+  hosts:
+    - host: automata.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service:
+            name: frontend
+            port: 80
+        - path: /api
+          pathType: Prefix
+          service:
+            name: backend
+            port: 8000
+  
+  tls:
+    - secretName: automata-tls
+      hosts:
+        - automata.example.com
+
+# ConfigMap and Secrets
+config:
+  # Application configuration
+  corsOrigins: "https://automata.example.com"
+  logLevel: "INFO"
+  
+  # CDN configuration
+  cdnEnabled: "true"
+  cdnBaseUrl: "https://cdn.automata.example.com"
+  
+  # Performance settings
+  poolSize: "20"
+  maxOverflow: "30"
+  poolTimeout: "30"
+  
+  # Monitoring
+  enableMetrics: "true"
+  metricsPort: "9090"
+
+# Secrets (these should be overridden in production)
+secrets:
+  secretKey: "changeme-super-secret-key-for-jwt-signing"
+  jwtSecret: "changeme-jwt-secret-key-32-chars-min"
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  cdnApiToken: ""
+  cdnZoneId: ""
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+  
+  # Prometheus rules for alerts
+  prometheusRules:
+    enabled: true
+
+# Network policy
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Volume configuration
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  
+  # PostgreSQL storage
+  postgres:
+    size: 20Gi
+  
+  # Redis storage  
+  redis:
+    size: 5Gi
+
+# Security
+security:
+  podSecurityPolicy:
+    enabled: false
+  
+  podSecurityStandard:
+    enabled: true
+    enforce: restricted
+    audit: restricted
+    warn: restricted
+
+# Resource quotas
+resourceQuota:
+  enabled: false
+  requests:
+    cpu: "4"
+    memory: "8Gi"
+  limits:
+    cpu: "8" 
+    memory: "16Gi"
+
+# Limit ranges
+limitRange:
+  enabled: false
+  default:
+    cpu: "500m"
+    memory: "512Mi"
+  defaultRequest:
+    cpu: "100m"
+    memory: "128Mi"

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "NFA",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#constants"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.nfa",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.nfa",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.nfa",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.nfa",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.nfa",
+          "match": "\\b(states|alphabet|start_state|accept_states|transitions|final_states)\\b"
+        },
+        {
+          "name": "storage.type.nfa",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.nfa",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.nfa",
+          "match": "\\b(epsilon|λ|ε)\\b"
+        },
+        {
+          "name": "entity.name.type.nfa",
+          "match": "\\bq[0-9]+\\b"
+        },
+        {
+          "name": "entity.name.function.nfa",
+          "match": "\\b(qaccept|qreject|qstart|qfinal)\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.automata.nfa"
+}

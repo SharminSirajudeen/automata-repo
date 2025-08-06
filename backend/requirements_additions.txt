@@ -1,0 +1,3 @@
+# Additional dependencies for LaTeX export, API platform, and automated grading
+scikit-learn==1.6.0
+aioredis==2.0.1

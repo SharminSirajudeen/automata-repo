@@ -30,6 +30,18 @@ from .routers.jflap_router import router as jflap_router
 from .routers.learning_router import router as learning_router
 from .routers.verification_router import router as verification_router
 from .routers.papers_router import router as papers_router
+from .routers.websocket_router import router as websocket_router
+from .routers.langgraph_router import router as langgraph_router
+from .routers.latex_router import router as latex_router
+from .routers.api_platform_router import router as api_platform_router
+from .routers.grading_router import router as grading_router
+
+# Import WebSocket server components
+from .websocket_server import socket_app, init_websocket_server, cleanup_websocket_server
+from .yjs_integration import initialize_yjs_integration, cleanup_yjs_integration
+
+# Import new platform components
+from .api_platform import initialize_api_platform, cleanup_api_platform
 
 # Configure logging
 logging.basicConfig(level=settings.log_level, format=settings.log_format)
@@ -79,6 +91,14 @@ app.include_router(jflap_router)
 app.include_router(learning_router)
 app.include_router(verification_router)
 app.include_router(papers_router)
+app.include_router(websocket_router)
+app.include_router(langgraph_router)
+app.include_router(latex_router)
+app.include_router(api_platform_router)
+app.include_router(grading_router)
+
+# Mount WebSocket app
+app.mount("/ws", socket_app)
 
 # Global problems and solutions storage (in production, this would be in a real database)
 problems_db = {}
@@ -96,8 +116,20 @@ async def startup_event():
         await initialize_ai_components()
         await initialize_problem_database()
         
+        # Initialize Redis integration for LangGraph
+        await initialize_redis_integration()
+        
         # Setup monitoring
         setup_monitoring()
+        
+        # Initialize WebSocket server
+        await init_websocket_server()
+        
+        # Initialize Y.js integration
+        await initialize_yjs_integration()
+        
+        # Initialize API Platform
+        await initialize_api_platform()
         
         logger.info("Application startup completed successfully")
     except Exception as e:
@@ -119,6 +151,17 @@ async def initialize_ai_components():
         logger.info("AI components initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize AI components: {e}")
+
+
+async def initialize_redis_integration():
+    """Initialize Redis integration for LangGraph workflows."""
+    try:
+        from .redis_integration import initialize_redis
+        await initialize_redis()
+        logger.info("Redis integration initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Redis integration: {e}")
+        # Don't raise here as Redis is optional for basic functionality
 
 
 async def initialize_problem_database():
@@ -169,6 +212,7 @@ async def root(request: Request):
             "adaptive_learning": "/api/learning/*",
             "verification": "/api/verification/*",
             "research_papers": "/api/papers/*",
+            "langgraph_workflows": "/api/langgraph/*",
             "documentation": "/docs",
             "health_check": "/health"
         },
@@ -270,11 +314,23 @@ async def shutdown_event():
         # Clean up AI components
         await cleanup_ai_components()
         
+        # Clean up Redis integration
+        await cleanup_redis_integration()
+        
         # Close database connections
         await cleanup_database_connections()
         
         # Cleanup monitoring
         cleanup_monitoring()
+        
+        # Cleanup WebSocket server
+        await cleanup_websocket_server()
+        
+        # Cleanup Y.js integration
+        await cleanup_yjs_integration()
+        
+        # Cleanup API Platform
+        await cleanup_api_platform()
         
         logger.info("Application shutdown completed successfully")
     except Exception as e:
@@ -290,6 +346,16 @@ async def cleanup_ai_components():
         logger.info("AI components cleaned up successfully")
     except Exception as e:
         logger.error(f"Failed to clean up AI components: {e}")
+
+
+async def cleanup_redis_integration():
+    """Clean up Redis integration resources."""
+    try:
+        from .redis_integration import shutdown_redis
+        await shutdown_redis()
+        logger.info("Redis integration cleaned up successfully")
+    except Exception as e:
+        logger.error(f"Failed to clean up Redis integration: {e}")
 
 
 async def cleanup_database_connections():
