@@ -1,0 +1,698 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Automata Load Balancer Dashboard",
+    "tags": ["automata", "load-balancer", "infrastructure"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 1,
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(up{job=\"automata-backend\"}, kubernetes_namespace)",
+          "refresh": 1,
+          "includeAll": false,
+          "multi": false,
+          "current": {
+            "value": "default",
+            "text": "default"
+          }
+        },
+        {
+          "name": "backend",
+          "type": "query", 
+          "datasource": "Prometheus",
+          "query": "label_values(up{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true,
+          "current": {
+            "value": ["$__all"],
+            "text": "All"
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "increase(kube_deployment_status_replicas{deployment=\"automata-backend\"}[1m]) != 0",
+          "iconColor": "blue",
+          "titleFormat": "Deployment Change",
+          "textFormat": "Replicas changed for {{deployment}}"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Load Balancer Overview",
+        "type": "stat",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "sum(up{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"})",
+            "legendFormat": "Healthy Backends",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "Request Rate (req/s)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(http_request_duration_seconds{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", quantile=\"0.95\"})",
+            "legendFormat": "95th Percentile Response Time",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", code!~\"2..\"}[5m])) / sum(rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}[5m])) * 100",
+            "legendFormat": "Error Rate (%)",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 80},
+                {"color": "red", "value": 95}
+              ]
+            },
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "displayMode": "list",
+              "orientation": "horizontal"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Error Rate (%)"},
+              "properties": [
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "green", "value": null},
+                      {"color": "yellow", "value": 1},
+                      {"color": "red", "value": 5}
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "horizontal",
+          "textMode": "auto",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate by Backend",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "sum by (instance) (rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"}[5m]))",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Requests/sec",
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "pointSize": 5,
+              "showPoints": "never"
+            },
+            "mappings": [],
+            "unit": "reqps"
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi", "sort": "desc"},
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "values": ["value", "mean", "max"]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Response Time Distribution",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}[5m])))",
+            "legendFormat": "50th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}[5m])))",
+            "legendFormat": "95th percentile",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}[5m])))",
+            "legendFormat": "99th percentile",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Response Time",
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "fillOpacity": 10
+            },
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Load Balancer Algorithm Performance",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "sum by (instance) (rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"}[5m]))",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          },
+          {
+            "expr": "avg by (instance) (http_request_duration_seconds{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\", quantile=\"0.95\"})",
+            "format": "table", 
+            "instant": true,
+            "refId": "B"
+          },
+          {
+            "expr": "sum by (instance) (up{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"})",
+            "format": "table",
+            "instant": true,
+            "refId": "C"
+          },
+          {
+            "expr": "sum by (instance) (increase(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\", code!~\"2..\"}[5m])) / sum by (instance) (increase(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"}[5m])) * 100",
+            "format": "table",
+            "instant": true,
+            "refId": "D"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "indexByName": {},
+              "renameByName": {
+                "instance": "Backend Instance",
+                "Value #A": "Request Rate (req/s)",
+                "Value #B": "95th Percentile (s)", 
+                "Value #C": "Health Status",
+                "Value #D": "Error Rate (%)"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "center",
+              "displayMode": "color-background"
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "Down", "color": "red"},
+                  "1": {"text": "Up", "color": "green"}
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 0.5}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Error Rate (%)"},
+              "properties": [
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "green", "value": null},
+                      {"color": "yellow", "value": 1},
+                      {"color": "red", "value": 5}
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "title": "Connection Pool Status",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "sum by (instance) (automata_active_connections{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"})",
+            "legendFormat": "Active - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "sum by (instance) (automata_max_connections{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"})",
+            "legendFormat": "Max - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Connections",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20
+            },
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Circuit Breaker Status",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "sum(automata_circuit_breaker_open{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 1}
+              ]
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "All Closed", "color": "green"},
+                  "from": 1,
+                  "to": 100
+                },
+                "type": "range"
+              }
+            ]
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "justifyMode": "center",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "id": 7,
+        "title": "Auto-Scaling Status",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "kube_horizontalpodautoscaler_status_current_replicas{hpa=\"automata-backend-hpa\", namespace=\"$namespace\"}",
+            "legendFormat": "Current",
+            "refId": "A"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_status_desired_replicas{hpa=\"automata-backend-hpa\", namespace=\"$namespace\"}",
+            "legendFormat": "Desired",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "mappings": [],
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "id": 8,
+        "title": "CPU Utilization",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "avg by (instance) (rate(container_cpu_usage_seconds_total{container=\"automata-backend\", namespace=\"$namespace\"}[5m])) * 100",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "CPU %",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20
+            },
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Memory Utilization",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "avg by (instance) (container_memory_usage_bytes{container=\"automata-backend\", namespace=\"$namespace\"} / container_spec_memory_limit_bytes{container=\"automata-backend\", namespace=\"$namespace\"}) * 100",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Memory %",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20
+            },
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Traffic Distribution by Path",
+        "type": "piechart",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "sum by (path) (rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "{{path}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "hideFrom": {
+                "vis": false
+              }
+            },
+            "mappings": [],
+            "unit": "reqps"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "pieType": "pie",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {
+            "displayMode": "visible",
+            "placement": "bottom",
+            "values": ["value", "percent"]
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "WebSocket Connections",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "sum by (instance) (automata_websocket_connections{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"})",
+            "legendFormat": "Active WS - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "sum by (instance) (rate(automata_websocket_messages_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"}[5m]))",
+            "legendFormat": "Messages/s - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 10
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": "Messages/s.*"},
+              "properties": [
+                {"id": "unit", "value": "reqps"}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 12,
+        "title": "Error Rate by Status Code",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 36
+        },
+        "targets": [
+          {
+            "expr": "sum by (code) (rate(http_requests_total{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", code!~\"2..\"}[5m]))",
+            "legendFormat": "{{code}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Errors/sec",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20,
+              "stacking": {"mode": "normal", "group": "A"}
+            },
+            "unit": "reqps"
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi", "sort": "desc"},
+          "legend": {"displayMode": "table", "placement": "right", "values": ["value", "max"]}
+        }
+      },
+      {
+        "id": 13,
+        "title": "Network I/O",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 44
+        },
+        "targets": [
+          {
+            "expr": "sum by (instance) (rate(container_network_receive_bytes_total{container=\"automata-backend\", namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "Rx - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "sum by (instance) (rate(container_network_transmit_bytes_total{container=\"automata-backend\", namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "Tx - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Bytes/sec",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20
+            },
+            "unit": "Bps"
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Database Connection Pool",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 44
+        },
+        "targets": [
+          {
+            "expr": "sum by (instance) (automata_db_connections_active{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"})",
+            "legendFormat": "Active - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "sum by (instance) (automata_db_connections_idle{job=\"automata-backend\", kubernetes_namespace=\"$namespace\", instance=~\"$backend\"})",
+            "legendFormat": "Idle - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "axisLabel": "Connections",
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20
+            },
+            "unit": "short"
+          }
+        }
+      }
+    ]
+  }
+}

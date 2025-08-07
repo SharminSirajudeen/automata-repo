@@ -33,10 +33,10 @@ dependencies:
     tags:
       - database
 
-  - name: redis
-    version: "17.3.7"
-    repository: "https://charts.bitnami.com/bitnami" 
-    condition: redis.enabled
+  - name: valkey
+    version: "1.0.0" # Please verify latest version
+    repository: "oci://registry-1.docker.io/bitnamicharts"
+    condition: valkey.enabled
     tags:
       - cache
 

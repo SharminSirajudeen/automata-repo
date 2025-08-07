@@ -264,8 +264,8 @@ postgresql:
       ports:
         postgresql: 5432
 
-# Redis configuration (Bitnami chart)
-redis:
+# Valkey configuration (Bitnami chart)
+valkey:
   enabled: true
   auth:
     enabled: false
@@ -380,8 +380,8 @@ persistence:
   postgres:
     size: 20Gi
   
-  # Redis storage  
-  redis:
+  # Valkey storage
+  valkey:
     size: 5Gi
 
 # Security

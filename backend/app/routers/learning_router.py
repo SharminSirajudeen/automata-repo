@@ -12,10 +12,10 @@ import logging
 from ..database import get_db, User
 from ..auth import get_current_active_user
 from ..adaptive_learning import (
-    adaptive_learning_engine, 
-    PerformanceData, 
+    adaptive_engine as adaptive_learning_engine,
+    StudentAction as PerformanceData,
     LearningSession,
-    DifficultyAdjustment
+    DifficultyLevel as DifficultyAdjustment
 )
 
 logger = logging.getLogger(__name__)

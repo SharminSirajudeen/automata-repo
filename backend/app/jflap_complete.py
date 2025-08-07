@@ -108,18 +108,26 @@ class Automaton:
             self.alphabet.add(transition.input_symbol)
 
 @dataclass
+class Production:
+    """Production rule representation"""
+    left: str
+    right: str
+    
+    def __str__(self):
+        return f"{self.left} → {self.right}"
+
+@dataclass
 class Grammar:
     """Context-free grammar representation"""
     variables: Set[str] = field(default_factory=set)
     terminals: Set[str] = field(default_factory=set)
-    productions: Dict[str, List[str]] = field(default_factory=dict)
+    productions: List[Production] = field(default_factory=list)
     start_symbol: str = "S"
     
     def add_production(self, variable: str, production: str):
         """Add production rule"""
-        if variable not in self.productions:
-            self.productions[variable] = []
-        self.productions[variable].append(production)
+        prod = Production(variable, production)
+        self.productions.append(prod)
         self.variables.add(variable)
         
         # Extract terminals

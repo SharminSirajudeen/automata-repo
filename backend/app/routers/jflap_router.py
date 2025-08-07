@@ -13,8 +13,11 @@ from ..jflap_complete import (
 )
 from ..jflap_simulator import simulation_engine
 from ..jflap_advanced import (
-    MultiTapeTuringMachine, UniversalTuringMachine, UnrestrictedGrammar,
-    ContextSensitiveGrammar, SLRParser, GNFConverter, EnhancedLSystem
+    MultiTapeTuringMachine, UniversalTuringMachine, #UnrestrictedGrammar,
+    #ContextSensitiveGrammar,
+    #SLRParser,
+    #GNFConverter,
+    EnhancedLSystem
 )
 
 logger = logging.getLogger(__name__)
@@ -582,167 +585,167 @@ async def simulate_universal_tm(request: UTMRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/advanced/grammar/unrestricted/parse")
-async def parse_unrestricted_grammar(request: AdvancedGrammarRequest, input_string: str = ""):
-    """Parse string using unrestricted grammar"""
-    try:
-        from ..jflap_complete import Production
+# @router.post("/advanced/grammar/unrestricted/parse")
+# async def parse_unrestricted_grammar(request: AdvancedGrammarRequest, input_string: str = ""):
+#     """Parse string using unrestricted grammar"""
+#     try:
+#         from ..jflap_complete import Production
         
-        # Create productions
-        productions = [
-            Production(prod["left"], prod["right"])
-            for prod in request.productions
-        ]
+#         # Create productions
+#         productions = [
+#             Production(prod["left"], prod["right"])
+#             for prod in request.productions
+#         ]
         
-        grammar = UnrestrictedGrammar(
-            set(request.variables),
-            set(request.terminals),
-            productions,
-            request.start_variable
-        )
+#         grammar = UnrestrictedGrammar(
+#             set(request.variables),
+#             set(request.terminals),
+#             productions,
+#             request.start_variable
+#         )
         
-        # Parse the input string
-        accepted, derivation = grammar.parse(input_string)
+#         # Parse the input string
+#         accepted, derivation = grammar.parse(input_string)
         
-        return {
-            "grammar": {
-                "variables": list(grammar.variables),
-                "terminals": list(grammar.terminals),
-                "productions": [p.to_dict() for p in grammar.productions],
-                "start_variable": grammar.start_variable,
-                "type": grammar.type
-            },
-            "parsing_result": {
-                "accepted": accepted,
-                "derivation": derivation
-            },
-            "grammar_properties": {
-                "is_valid": grammar.is_valid(),
-                "productions_count": len(grammar.productions)
-            }
-        }
+#         return {
+#             "grammar": {
+#                 "variables": list(grammar.variables),
+#                 "terminals": list(grammar.terminals),
+#                 "productions": [p.to_dict() for p in grammar.productions],
+#                 "start_variable": grammar.start_variable,
+#                 "type": grammar.type
+#             },
+#             "parsing_result": {
+#                 "accepted": accepted,
+#                 "derivation": derivation
+#             },
+#             "grammar_properties": {
+#                 "is_valid": grammar.is_valid(),
+#                 "productions_count": len(grammar.productions)
+#             }
+#         }
         
-    except Exception as e:
-        logger.error(f"Unrestricted grammar parsing error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         logger.error(f"Unrestricted grammar parsing error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/advanced/grammar/context-sensitive/parse")
-async def parse_context_sensitive_grammar(request: AdvancedGrammarRequest, input_string: str = ""):
-    """Parse string using context-sensitive grammar"""
-    try:
-        from ..jflap_complete import Production
+# @router.post("/advanced/grammar/context-sensitive/parse")
+# async def parse_context_sensitive_grammar(request: AdvancedGrammarRequest, input_string: str = ""):
+#     """Parse string using context-sensitive grammar"""
+#     try:
+#         from ..jflap_complete import Production
         
-        # Create productions
-        productions = [
-            Production(prod["left"], prod["right"])
-            for prod in request.productions
-        ]
+#         # Create productions
+#         productions = [
+#             Production(prod["left"], prod["right"])
+#             for prod in request.productions
+#         ]
         
-        grammar = ContextSensitiveGrammar(
-            set(request.variables),
-            set(request.terminals),
-            productions,
-            request.start_variable
-        )
+#         grammar = ContextSensitiveGrammar(
+#             set(request.variables),
+#             set(request.terminals),
+#             productions,
+#             request.start_variable
+#         )
         
-        # Parse the input string
-        accepted, derivation = grammar.parse(input_string)
+#         # Parse the input string
+#         accepted, derivation = grammar.parse(input_string)
         
-        # Optimize grammar
-        optimized = grammar.optimize_parsing()
+#         # Optimize grammar
+#         optimized = grammar.optimize_parsing()
         
-        return {
-            "grammar": {
-                "variables": list(grammar.variables),
-                "terminals": list(grammar.terminals),
-                "productions": [p.to_dict() for p in grammar.productions],
-                "start_variable": grammar.start_variable,
-                "type": grammar.type
-            },
-            "parsing_result": {
-                "accepted": accepted,
-                "derivation": derivation
-            },
-            "optimized_grammar": {
-                "variables": list(optimized.variables),
-                "productions_count": len(optimized.productions)
-            },
-            "grammar_properties": {
-                "is_valid": grammar.is_valid(),
-                "is_context_sensitive": True
-            }
-        }
+#         return {
+#             "grammar": {
+#                 "variables": list(grammar.variables),
+#                 "terminals": list(grammar.terminals),
+#                 "productions": [p.to_dict() for p in grammar.productions],
+#                 "start_variable": grammar.start_variable,
+#                 "type": grammar.type
+#             },
+#             "parsing_result": {
+#                 "accepted": accepted,
+#                 "derivation": derivation
+#             },
+#             "optimized_grammar": {
+#                 "variables": list(optimized.variables),
+#                 "productions_count": len(optimized.productions)
+#             },
+#             "grammar_properties": {
+#                 "is_valid": grammar.is_valid(),
+#                 "is_context_sensitive": True
+#             }
+#         }
         
-    except Exception as e:
-        logger.error(f"Context-sensitive grammar parsing error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         logger.error(f"Context-sensitive grammar parsing error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/advanced/parser/slr1")
-async def slr1_parse_advanced(request: SLRParseRequest):
-    """Parse string using SLR(1) parser with full DFA construction"""
-    try:
-        grammar = Grammar.from_dict(request.grammar)
-        parser = SLRParser(grammar)
+# @router.post("/advanced/parser/slr1")
+# async def slr1_parse_advanced(request: SLRParseRequest):
+#     """Parse string using SLR(1) parser with full DFA construction"""
+#     try:
+#         grammar = Grammar.from_dict(request.grammar)
+#         parser = SLRParser(grammar)
         
-        # Parse the input
-        accepted, result = parser.parse(request.input_string)
+#         # Parse the input
+#         accepted, result = parser.parse(request.input_string)
         
-        # Get parse tables
-        tables = parser.get_parse_tables()
+#         # Get parse tables
+#         tables = parser.get_parse_tables()
         
-        return {
-            "grammar": request.grammar,
-            "input_string": request.input_string,
-            "parsing_result": {
-                "accepted": accepted,
-                "parse_trace": result
-            },
-            "parser_construction": {
-                "dfa_states": len(parser.dfa_states),
-                "action_entries": len(parser.action_table),
-                "goto_entries": len(parser.goto_table),
-                "first_sets": {k: list(v) for k, v in parser.first_sets.items()},
-                "follow_sets": {k: list(v) for k, v in parser.follow_sets.items()}
-            },
-            "parse_tables": tables
-        }
+#         return {
+#             "grammar": request.grammar,
+#             "input_string": request.input_string,
+#             "parsing_result": {
+#                 "accepted": accepted,
+#                 "parse_trace": result
+#             },
+#             "parser_construction": {
+#                 "dfa_states": len(parser.dfa_states),
+#                 "action_entries": len(parser.action_table),
+#                 "goto_entries": len(parser.goto_table),
+#                 "first_sets": {k: list(v) for k, v in parser.first_sets.items()},
+#                 "follow_sets": {k: list(v) for k, v in parser.follow_sets.items()}
+#             },
+#             "parse_tables": tables
+#         }
         
-    except Exception as e:
-        logger.error(f"SLR(1) parsing error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         logger.error(f"SLR(1) parsing error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/advanced/grammar/to-gnf")
-async def convert_to_gnf(request: GNFRequest):
-    """Convert grammar to Greibach Normal Form"""
-    try:
-        grammar = Grammar.from_dict(request.grammar)
-        converter = GNFConverter(grammar)
+# @router.post("/advanced/grammar/to-gnf")
+# async def convert_to_gnf(request: GNFRequest):
+#     """Convert grammar to Greibach Normal Form"""
+#     try:
+#         grammar = Grammar.from_dict(request.grammar)
+#         converter = GNFConverter(grammar)
         
-        # Convert to GNF
-        gnf_grammar = converter.convert()
+#         # Convert to GNF
+#         gnf_grammar = converter.convert()
         
-        return {
-            "original_grammar": request.grammar,
-            "gnf_grammar": {
-                "variables": list(gnf_grammar.variables),
-                "terminals": list(gnf_grammar.terminals),
-                "productions": [p.to_dict() for p in gnf_grammar.productions],
-                "start_variable": gnf_grammar.start_variable
-            },
-            "conversion_info": {
-                "is_valid_gnf": converter.verify_gnf(),
-                "original_productions": len(grammar.productions),
-                "gnf_productions": len(gnf_grammar.productions)
-            },
-            "algorithm": "gnf_conversion"
-        }
+#         return {
+#             "original_grammar": request.grammar,
+#             "gnf_grammar": {
+#                 "variables": list(gnf_grammar.variables),
+#                 "terminals": list(gnf_grammar.terminals),
+#                 "productions": [p.to_dict() for p in gnf_grammar.productions],
+#                 "start_variable": gnf_grammar.start_variable
+#             },
+#             "conversion_info": {
+#                 "is_valid_gnf": converter.verify_gnf(),
+#                 "original_productions": len(grammar.productions),
+#                 "gnf_productions": len(gnf_grammar.productions)
+#             },
+#             "algorithm": "gnf_conversion"
+#         }
         
-    except Exception as e:
-        logger.error(f"GNF conversion error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         logger.error(f"GNF conversion error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/advanced/lsystem/generate")

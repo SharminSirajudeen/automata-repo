@@ -112,10 +112,10 @@ Create a default fully qualified postgresql name.
 {{- end }}
 
 {{/*
-Create a default fully qualified redis name.
+Create a default fully qualified valkey name.
 */}}
-{{- define "automata-app.redis.fullname" -}}
-{{- printf "%s-%s" .Release.Name "redis" | trunc 63 | trimSuffix "-" -}}
+{{- define "automata-app.valkey.fullname" -}}
+{{- printf "%s-%s" .Release.Name "valkey" | trunc 63 | trimSuffix "-" -}}
 {{- end }}
 
 {{/*
@@ -130,11 +130,11 @@ Get the postgres password secret name
 {{- end }}
 
 {{/*
-Get the redis password secret name
+Get the valkey password secret name
 */}}
-{{- define "automata-app.redis.secretName" -}}
-{{- if .Values.redis.enabled }}
-{{- printf "%s" (include "automata-app.redis.fullname" .) -}}
+{{- define "automata-app.valkey.secretName" -}}
+{{- if .Values.valkey.enabled }}
+{{- printf "%s" (include "automata-app.valkey.fullname" .) -}}
 {{- else }}
 {{- printf "%s" (include "automata-app.fullname" .) -}}
 {{- end }}
@@ -156,15 +156,15 @@ postgresql://{{ $username }}:$(DATABASE_PASSWORD)@{{ $host }}:{{ $port }}/{{ $da
 {{- end }}
 
 {{/*
-Redis URL for the application
+Valkey URL for the application
 */}}
-{{- define "automata-app.redisUrl" -}}
-{{- if .Values.redis.enabled -}}
-{{- $host := printf "%s-master" (include "automata-app.redis.fullname" .) -}}
-{{- $port := .Values.redis.master.service.ports.redis -}}
-redis://{{ $host }}:{{ $port }}
+{{- define "automata-app.valkeyUrl" -}}
+{{- if .Values.valkey.enabled -}}
+{{- $host := printf "%s-master" (include "automata-app.valkey.fullname" .) -}}
+{{- $port := .Values.valkey.master.service.ports.valkey -}}
+valkey://{{ $host }}:{{ $port }}
 {{- else -}}
-{{- .Values.externalRedis.url -}}
+{{- .Values.externalValkey.url -}}
 {{- end -}}
 {{- end }}
 
@@ -179,8 +179,8 @@ Common environment variables
     secretKeyRef:
       name: {{ include "automata-app.postgresql.secretName" . }}
       key: {{ if .Values.postgresql.enabled }}postgres-password{{ else }}password{{ end }}
-- name: REDIS_URL
-  value: {{ include "automata-app.redisUrl" . | quote }}
+- name: VALKEY_URL
+  value: {{ include "automata-app.valkeyUrl" . | quote }}
 - name: SECRET_KEY
   valueFrom:
     secretKeyRef:

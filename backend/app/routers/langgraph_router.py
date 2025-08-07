@@ -15,11 +15,11 @@ from ..langgraph_core import (
     workflow_executor, checkpoint_manager, human_loop_manager,
     WorkflowStatus, InterruptType
 )
-from ..tutoring_workflow import tutoring_workflow, TutoringMode, DifficultyLevel, LearningStyle
-from ..proof_assistant_graph import proof_assistant_workflow, ProofPhase
-from ..automata_construction_graph import automata_construction_workflow, ConstructionPhase, AutomataType
-from ..redis_integration import (
-    redis_session_manager, redis_state_manager, redis_checkpoint_store, redis_monitor
+from ..tutoring_flow import tutoring_workflow, TutoringMode, DifficultyLevel, LearningStyle
+from ..proof_assistant_flow import proof_assistant_workflow, ProofPhase
+from ..automata_construction_flow import automata_construction_workflow, ConstructionPhase, AutomataType
+from ..cache_integration import (
+    valkey_session_manager, valkey_state_manager, valkey_checkpoint_store, valkey_monitor
 )
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ async def start_tutoring_session(
         
         # Check if resuming existing session
         if request.resume_session_id:
-            session_data = await redis_session_manager.get_session(request.resume_session_id)
+            session_data = await valkey_session_manager.get_session(request.resume_session_id)
             if session_data and session_data.get("status") == "active":
                 session_id = request.resume_session_id
             else:
@@ -114,7 +114,7 @@ async def start_tutoring_session(
                 )
         
         # Create session record
-        await redis_session_manager.create_session(
+        await valkey_session_manager.create_session(
             session_id=session_id,
             user_id=request.user_id,
             session_type="tutoring",
@@ -164,7 +164,7 @@ async def start_proof_session(
         
         # Check if resuming existing session
         if request.resume_session_id:
-            session_data = await redis_session_manager.get_session(request.resume_session_id)
+            session_data = await valkey_session_manager.get_session(request.resume_session_id)
             if session_data and session_data.get("status") == "active":
                 session_id = request.resume_session_id
             else:
@@ -177,7 +177,7 @@ async def start_proof_session(
                 )
         
         # Create session record
-        await redis_session_manager.create_session(
+        await valkey_session_manager.create_session(
             session_id=session_id,
             user_id=request.user_id,
             session_type="proof",
@@ -227,7 +227,7 @@ async def start_automata_session(
         
         # Check if resuming existing session
         if request.resume_session_id:
-            session_data = await redis_session_manager.get_session(request.resume_session_id)
+            session_data = await valkey_session_manager.get_session(request.resume_session_id)
             if session_data and session_data.get("status") == "active":
                 session_id = request.resume_session_id
             else:
@@ -240,7 +240,7 @@ async def start_automata_session(
                 )
         
         # Create session record
-        await redis_session_manager.create_session(
+        await valkey_session_manager.create_session(
             session_id=session_id,
             user_id=request.user_id,
             session_type="automata",
@@ -277,7 +277,7 @@ async def continue_workflow(request: ContinueWorkflowRequest):
     """Continue an existing workflow with user input."""
     try:
         # Get session data
-        session_data = await redis_session_manager.get_session(request.session_id)
+        session_data = await valkey_session_manager.get_session(request.session_id)
         if not session_data:
             raise HTTPException(status_code=404, detail="Session not found")
         
@@ -301,7 +301,7 @@ async def continue_workflow(request: ContinueWorkflowRequest):
             raise HTTPException(status_code=400, detail="Unknown session type")
         
         # Update session activity
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             request.session_id,
             {"last_activity": datetime.now().isoformat()}
         )
@@ -336,7 +336,7 @@ async def control_workflow(request: WorkflowControlRequest):
         elif action == "cancel":
             success = await workflow_executor.cancel_workflow(session_id)
             if success:
-                await redis_session_manager.close_session(session_id)
+                await valkey_session_manager.close_session(session_id)
             message = "Workflow cancelled" if success else "Failed to cancel workflow"
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
@@ -358,7 +358,7 @@ async def get_session_status(session_id: str):
     """Get detailed status of a workflow session."""
     try:
         # Get session data
-        session_data = await redis_session_manager.get_session(session_id)
+        session_data = await valkey_session_manager.get_session(session_id)
         if not session_data:
             raise HTTPException(status_code=404, detail="Session not found")
         
@@ -366,7 +366,7 @@ async def get_session_status(session_id: str):
         workflow_status = await workflow_executor.get_workflow_status(session_id)
         
         # Get checkpoints
-        checkpoints = await redis_checkpoint_store.list_checkpoints(session_id)
+        checkpoints = await valkey_checkpoint_store.list_checkpoints(session_id)
         checkpoint_ids = [cp["checkpoint_id"] for cp in checkpoints]
         
         # Get pending human inputs
@@ -396,7 +396,7 @@ async def list_user_sessions(
 ):
     """List all sessions for a user."""
     try:
-        sessions = await redis_session_manager.list_user_sessions(user_id, status)
+        sessions = await valkey_session_manager.list_user_sessions(user_id, status)
         
         # Enrich with additional data
         enriched_sessions = []
@@ -407,7 +407,7 @@ async def list_user_sessions(
             workflow_status = await workflow_executor.get_workflow_status(session_id)
             
             # Get checkpoint count
-            checkpoints = await redis_checkpoint_store.list_checkpoints(session_id)
+            checkpoints = await valkey_checkpoint_store.list_checkpoints(session_id)
             
             enriched_session = {
                 **session,
@@ -433,7 +433,7 @@ async def list_user_sessions(
 async def list_session_checkpoints(session_id: str):
     """List all checkpoints for a session."""
     try:
-        checkpoints = await redis_checkpoint_store.list_checkpoints(session_id)
+        checkpoints = await valkey_checkpoint_store.list_checkpoints(session_id)
         
         return {
             "session_id": session_id,
@@ -451,7 +451,7 @@ async def restore_checkpoint(session_id: str, version: str):
     """Restore a session from a specific checkpoint."""
     try:
         # Load checkpoint data
-        checkpoint_data = await redis_checkpoint_store.load_checkpoint(session_id, version)
+        checkpoint_data = await valkey_checkpoint_store.load_checkpoint(session_id, version)
         
         if not checkpoint_data:
             raise HTTPException(status_code=404, detail="Checkpoint not found")
@@ -513,29 +513,29 @@ async def get_pending_human_inputs(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/monitor/redis")
-async def get_redis_status():
-    """Get Redis status and metrics."""
+@router.get("/monitor/valkey")
+async def get_valkey_status():
+    """Get Valkey status and metrics."""
     try:
-        redis_info = await redis_monitor.get_redis_info()
-        key_stats = await redis_monitor.get_key_statistics()
+        valkey_info = await valkey_monitor.get_valkey_info()
+        key_stats = await valkey_monitor.get_key_statistics()
         
         return {
-            "redis_info": redis_info,
+            "valkey_info": valkey_info,
             "key_statistics": key_stats,
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        logger.error(f"Failed to get Redis status: {e}")
+        logger.error(f"Failed to get Valkey status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/monitor/cleanup")
 async def cleanup_expired_data():
-    """Clean up expired Redis data."""
+    """Clean up expired Valkey data."""
     try:
-        cleaned_count = await redis_monitor.cleanup_expired_keys()
+        cleaned_count = await valkey_monitor.cleanup_expired_keys()
         
         return {
             "cleaned_keys": cleaned_count,
@@ -567,7 +567,7 @@ async def _start_tutoring_workflow(
         )
         
         # Update session with result
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             session_id,
             {
                 "workflow_result": result,
@@ -577,7 +577,7 @@ async def _start_tutoring_workflow(
         
     except Exception as e:
         logger.error(f"Background tutoring workflow failed: {e}")
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             session_id,
             {"status": "error", "error": str(e)}
         )
@@ -601,7 +601,7 @@ async def _start_proof_workflow(
         )
         
         # Update session with result
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             session_id,
             {
                 "workflow_result": result,
@@ -611,7 +611,7 @@ async def _start_proof_workflow(
         
     except Exception as e:
         logger.error(f"Background proof workflow failed: {e}")
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             session_id,
             {"status": "error", "error": str(e)}
         )
@@ -631,7 +631,7 @@ async def _start_automata_workflow(
         )
         
         # Update session with result
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             session_id,
             {
                 "workflow_result": result,
@@ -641,7 +641,7 @@ async def _start_automata_workflow(
         
     except Exception as e:
         logger.error(f"Background automata workflow failed: {e}")
-        await redis_session_manager.update_session(
+        await valkey_session_manager.update_session(
             session_id,
             {"status": "error", "error": str(e)}
         )

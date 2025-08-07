@@ -26,7 +26,7 @@ from langchain.schema import Document as LangchainDocument
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 
-from .ai_config import get_ai_config
+from .ai_config import get_ai_config, ModelType
 from .semantic_search import ChromaDBManager, Document, DocumentType
 from .orchestrator import orchestrator, ExecutionMode
 
@@ -302,9 +302,10 @@ Format: One question per line."""
 class RAGChain:
     """Main RAG chain for question answering."""
     
-    def __init__(self):
+    def __init__(self, db_manager: ChromaDBManager):
         self.config = get_ai_config()
         self.processor = DocumentProcessor()
+        self.db_manager = db_manager
         
         # Initialize embeddings
         self.embeddings = OllamaEmbeddings(
@@ -312,11 +313,11 @@ class RAGChain:
             base_url=self.config.ollama_base_url
         )
         
-        # Initialize vector store
+        # Initialize vector store using the existing client
         self.vectorstore = Chroma(
-            persist_directory=self.config.vector_db.persist_directory,
-            embedding_function=self.embeddings,
-            collection_name="rag_documents"
+            client=self.db_manager.client,
+            collection_name="rag_documents",
+            embedding_function=self.embeddings
         )
         
         # Initialize retriever
@@ -764,7 +765,8 @@ class SourceAttributor:
 
 
 # Global instances
-rag_chain = RAGChain()
+from .semantic_search import db_manager
+rag_chain = RAGChain(db_manager)
 source_attributor = SourceAttributor()
 
 

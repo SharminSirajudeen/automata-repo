@@ -1,0 +1,209 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: automata-postgres
+  namespace: automata-app
+  labels:
+    app: automata-postgres
+    component: database
+spec:
+  serviceName: automata-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: automata-postgres
+  template:
+    metadata:
+      labels:
+        app: automata-postgres
+        component: database
+    spec:
+      serviceAccountName: automata-postgres
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+        env:
+        - name: POSTGRES_DB
+          value: automata_db
+        - name: POSTGRES_USER
+          value: automata
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: automata-secrets
+              key: postgres-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF8 --locale=C"
+        args:
+        - postgres
+        - -c
+        - max_connections=200
+        - -c
+        - shared_buffers=256MB
+        - -c
+        - effective_cache_size=1GB
+        - -c
+        - work_mem=4MB
+        - -c
+        - maintenance_work_mem=64MB
+        - -c
+        - random_page_cost=1.1
+        - -c
+        - temp_file_limit=2GB
+        - -c
+        - log_min_duration_statement=1000
+        - -c
+        - log_connections=on
+        - -c
+        - log_disconnections=on
+        - -c
+        - log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U automata -d automata_db
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U automata -d automata_db
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U automata -d automata_db
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 999
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+          readOnly: true
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      tolerations:
+      - key: "vast.ai/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+      labels:
+        app: automata-postgres
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: automata-postgres
+  namespace: automata-app
+  labels:
+    app: automata-postgres
+    component: database
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: postgres
+    protocol: TCP
+    name: postgres
+  selector:
+    app: automata-postgres
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: automata-postgres
+  namespace: automata-app
+  labels:
+    app: automata-postgres
+    component: database
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: automata-app
+data:
+  postgresql.conf: |
+    # PostgreSQL configuration for automata platform
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    random_page_cost = 1.1
+    temp_file_limit = 2GB
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_min_duration_statement = 1000
+    log_connections = on
+    log_disconnections = on
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    
+    # Performance
+    checkpoint_timeout = 5min
+    checkpoint_completion_target = 0.7
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    
+    # Security
+    ssl = off
+    password_encryption = scram-sha-256

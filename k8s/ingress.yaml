@@ -18,7 +18,7 @@ metadata:
     
     # CORS settings
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://automata.example.com,https://www.automata.example.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://automata.vast.ai,https://automata-prod.vast.ai"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
     
@@ -53,45 +53,45 @@ metadata:
 spec:
   tls:
   - hosts:
-    - automata.example.com
-    - www.automata.example.com
-    - api.automata.example.com
+    - automata.vast.ai
+    - automata-prod.vast.ai
+    - api.automata.vast.ai
     secretName: automata-tls
   
   rules:
   # Main application
-  - host: automata.example.com
+  - host: automata.vast.ai
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: frontend-service
+            name: automata-frontend
             port:
               number: 80
   
-  # WWW redirect
-  - host: www.automata.example.com
+  # Production environment
+  - host: automata-prod.vast.ai
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: frontend-service
+            name: automata-frontend
             port:
               number: 80
   
   # API subdomain
-  - host: api.automata.example.com
+  - host: api.automata.vast.ai
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: backend-service
+            name: automata-backend
             port:
               number: 8000
 
@@ -128,11 +128,11 @@ metadata:
 spec:
   tls:
   - hosts:
-    - automata.example.com
+    - automata.vast.ai
     secretName: automata-tls
   
   rules:
-  - host: automata.example.com
+  - host: automata.vast.ai
     http:
       paths:
       # API routes
@@ -140,7 +140,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: backend-service
+            name: automata-backend
             port:
               number: 8000
       # WebSocket routes
@@ -148,7 +148,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: backend-service
+            name: automata-backend
             port:
               number: 8000
 

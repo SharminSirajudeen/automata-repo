@@ -1,0 +1,212 @@
+# Persistent Volume Claims for Automata Platform
+# Optimized for vast.ai GPU instances with high-performance storage
+
+apiVersion: v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  labels:
+    app: automata
+    component: storage
+provisioner: kubernetes.io/no-provisioner
+parameters:
+  type: gp3  # High-performance SSD for vast.ai
+  fsType: ext4
+  iops: "3000"
+  throughput: "125"
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+---
+# Database Storage - High IOPS for database operations
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-postgres-data
+  namespace: automata-app
+  labels:
+    app: automata-postgres
+    component: database
+    storage-tier: high-performance
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi  # Sufficient for production database
+  selector:
+    matchLabels:
+      app: automata-postgres
+
+---
+# Redis Storage - For persistence and AOF files
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-redis-data
+  namespace: automata-app
+  labels:
+    app: automata-redis
+    component: cache
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 20Gi  # For Redis persistence and snapshots
+
+---
+# Application Logs Storage - Centralized logging
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-logs-pvc
+  namespace: automata-app
+  labels:
+    app: automata
+    component: logging
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can write logs
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 30Gi  # For application and system logs
+
+---
+# File Uploads Storage - User-uploaded files, JFLAP files, etc.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-uploads-pvc
+  namespace: automata-app
+  labels:
+    app: automata
+    component: uploads
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods need access to uploads
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 100Gi  # For user files, models, datasets
+
+---
+# Prometheus Metrics Storage - Time-series data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data-pvc
+  namespace: automata-app
+  labels:
+    app: prometheus
+    component: monitoring
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi  # Metrics retention for 30 days
+
+---
+# Grafana Dashboard Storage - Dashboard configurations
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data-pvc
+  namespace: automata-app
+  labels:
+    app: grafana
+    component: monitoring
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 10Gi  # Dashboard configs and user data
+
+---
+# AI Model Cache Storage - For LLM models and embeddings
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-ai-cache-pvc
+  namespace: automata-app
+  labels:
+    app: automata
+    component: ai-cache
+    storage-tier: high-performance
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple backend pods access model cache
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 200Gi  # Large models and vector embeddings
+
+---
+# Backup Storage - Database backups and snapshots
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-backup-pvc
+  namespace: automata-app
+  labels:
+    app: automata
+    component: backup
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 100Gi  # Database and application backups
+
+---
+# Shared Workspace Storage - For collaborative features
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: automata-workspace-pvc
+  namespace: automata-app
+  labels:
+    app: automata
+    component: workspace
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteMany  # Shared across frontend and backend pods
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi  # Shared project files and collaborative data
+
+---
+# SSL Certificate Storage - For cert-manager
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cert-manager-data-pvc
+  namespace: automata-app
+  labels:
+    app: cert-manager
+    component: tls
+    storage-tier: standard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 5Gi  # SSL certificates and ACME challenges

@@ -1,0 +1,192 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: automata-redis
+  namespace: automata-app
+  labels:
+    app: automata-redis
+    component: cache
+spec:
+  serviceName: automata-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: automata-redis
+  template:
+    metadata:
+      labels:
+        app: automata-redis
+        component: cache
+    spec:
+      serviceAccountName: automata-redis
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: redis
+          containerPort: 6379
+          protocol: TCP
+        command:
+        - redis-server
+        - /etc/redis/redis.conf
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: automata-secrets
+              key: redis-password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+            ephemeral-storage: "2Gi"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 999
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+          readOnly: true
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+      tolerations:
+      - key: "vast.ai/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+      labels:
+        app: automata-redis
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: automata-redis
+  namespace: automata-app
+  labels:
+    app: automata-redis
+    component: cache
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: redis
+    protocol: TCP
+    name: redis
+  selector:
+    app: automata-redis
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: automata-redis
+  namespace: automata-app
+  labels:
+    app: automata-redis
+    component: cache
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: automata-app
+data:
+  redis.conf: |
+    # Redis production configuration for automata platform
+    
+    # Network and security
+    bind 0.0.0.0
+    protected-mode yes
+    port 6379
+    timeout 300
+    tcp-keepalive 60
+    
+    # Memory management
+    maxmemory 384mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 10
+    
+    # Persistence
+    appendonly yes
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    # Logging
+    loglevel notice
+    syslog-enabled no
+    
+    # Performance tuning
+    databases 16
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # Advanced configurations
+    hash-max-ziplist-entries 512
+    hash-max-ziplist-value 64
+    list-max-ziplist-size -2
+    list-compress-depth 0
+    set-max-intset-entries 512
+    zset-max-ziplist-entries 128
+    zset-max-ziplist-value 64
+    hll-sparse-max-bytes 3000
+    
+    # Client connections
+    tcp-backlog 511
+    tcp-keepalive 300

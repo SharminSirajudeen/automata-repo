@@ -1,0 +1,294 @@
+# Horizontal Pod Autoscalers for Automata Platform
+# Optimized for vast.ai GPU instances with intelligent scaling policies
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: automata-frontend-hpa
+  namespace: automata-app
+  labels:
+    app: automata-frontend
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: automata-frontend
+  minReplicas: 2  # Always have 2 replicas for high availability
+  maxReplicas: 10  # Scale up to 10 replicas under load
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when average CPU > 70%
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale when average memory > 80%
+  # Custom metrics - request rate
+  - type: Pods
+    pods:
+      metric:
+        name: nginx_http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"  # Scale when > 100 RPS per pod
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Wait 60s before scaling up
+      policies:
+      - type: Percent
+        value: 50  # Scale up by 50% of current replicas
+        periodSeconds: 60
+      - type: Pods
+        value: 2  # Or add 2 pods at once
+        periodSeconds: 60
+      selectPolicy: Max  # Choose the higher scaling rate
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 10  # Scale down by 10% of current replicas
+        periodSeconds: 60
+      - type: Pods
+        value: 1  # Or remove 1 pod at once
+        periodSeconds: 60
+      selectPolicy: Min  # Choose the lower scaling rate
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: automata-backend-hpa
+  namespace: automata-app
+  labels:
+    app: automata-backend
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: automata-backend
+  minReplicas: 2  # Minimum for redundancy and load distribution
+  maxReplicas: 8  # Maximum for cost control (backend is more resource-intensive)
+  metrics:
+  # CPU-based scaling (AI workloads are CPU intensive)
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60  # Lower threshold due to AI processing
+  # Memory-based scaling (Large language models use significant memory)
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75  # Scale before memory pressure
+  # Custom metrics - API request rate
+  - type: Pods
+    pods:
+      metric:
+        name: fastapi_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "50"  # Scale when > 50 API requests/sec per pod
+  # Custom metrics - Queue depth for AI processing
+  - type: Pods
+    pods:
+      metric:
+        name: automata_ai_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "10"  # Scale when > 10 queued AI requests per pod
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120  # Wait longer for AI workloads
+      policies:
+      - type: Percent
+        value: 100  # Double replicas when needed (AI bursts)
+        periodSeconds: 300
+      - type: Pods
+        value: 1  # Or add 1 pod every 2 minutes
+        periodSeconds: 120
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Wait 10 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 25  # Scale down by 25%
+        periodSeconds: 300
+      - type: Pods
+        value: 1  # Remove 1 pod at a time
+        periodSeconds: 300
+      selectPolicy: Min
+
+---
+# Vertical Pod Autoscaler for better resource optimization
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: automata-backend-vpa
+  namespace: automata-app
+  labels:
+    app: automata-backend
+    component: autoscaling
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: automata-backend
+  updatePolicy:
+    updateMode: "Auto"  # Automatically apply recommendations
+  resourcePolicy:
+    containerPolicies:
+    - containerName: backend
+      maxAllowed:
+        cpu: 4
+        memory: 8Gi
+      minAllowed:
+        cpu: 500m
+        memory: 1Gi
+      controlledResources: ["cpu", "memory"]
+
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: automata-frontend-vpa
+  namespace: automata-app
+  labels:
+    app: automata-frontend
+    component: autoscaling
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: automata-frontend
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: frontend
+      maxAllowed:
+        cpu: 1
+        memory: 1Gi
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      controlledResources: ["cpu", "memory"]
+
+---
+# Pod Disruption Budget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: automata-frontend-pdb
+  namespace: automata-app
+  labels:
+    app: automata-frontend
+    component: availability
+spec:
+  selector:
+    matchLabels:
+      app: automata-frontend
+  minAvailable: 1  # Always keep at least 1 frontend pod running
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: automata-backend-pdb
+  namespace: automata-app
+  labels:
+    app: automata-backend
+    component: availability
+spec:
+  selector:
+    matchLabels:
+      app: automata-backend
+  minAvailable: 1  # Always keep at least 1 backend pod running
+
+---
+# Resource Quotas for namespace-level limits
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: automata-resource-quota
+  namespace: automata-app
+  labels:
+    app: automata
+    component: resource-management
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "20"        # Total CPU requests
+    requests.memory: "40Gi"   # Total memory requests
+    limits.cpu: "40"          # Total CPU limits
+    limits.memory: "80Gi"     # Total memory limits
+    
+    # Storage resources
+    requests.storage: "500Gi" # Total storage requests
+    
+    # Object counts
+    pods: "50"                # Maximum number of pods
+    services: "20"            # Maximum number of services
+    secrets: "20"             # Maximum number of secrets
+    configmaps: "20"          # Maximum number of configmaps
+    persistentvolumeclaims: "20"  # Maximum PVCs
+    
+    # GPU resources (if available on vast.ai)
+    requests.nvidia.com/gpu: "4"   # Total GPU requests
+    limits.nvidia.com/gpu: "4"     # Total GPU limits
+
+---
+# Limit Range for default resource constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: automata-limit-range
+  namespace: automata-app
+  labels:
+    app: automata
+    component: resource-management
+spec:
+  limits:
+  # Container-level limits
+  - type: Container
+    default:         # Default limits if not specified
+      cpu: "500m"
+      memory: "1Gi"
+      ephemeral-storage: "2Gi"
+    defaultRequest:  # Default requests if not specified
+      cpu: "100m"
+      memory: "256Mi"
+      ephemeral-storage: "1Gi"
+    min:             # Minimum allowed
+      cpu: "50m"
+      memory: "64Mi"
+      ephemeral-storage: "500Mi"
+    max:             # Maximum allowed
+      cpu: "8"
+      memory: "16Gi"
+      ephemeral-storage: "10Gi"
+  
+  # Pod-level limits
+  - type: Pod
+    max:
+      cpu: "16"
+      memory: "32Gi"
+      ephemeral-storage: "20Gi"
+  
+  # PVC limits
+  - type: PersistentVolumeClaim
+    min:
+      storage: "1Gi"
+    max:
+      storage: "1Ti"

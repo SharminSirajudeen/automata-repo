@@ -1,0 +1,27 @@
+# HAProxy Rate Limiting Map
+# Maps paths to rate limit values (requests per second per IP)
+
+# Authentication endpoints - strict limits
+^/auth/login 3
+^/auth/register 2
+^/auth/reset 1
+
+# AI endpoints - moderate limits
+^/api/ai/ 5
+^/api/langgraph/ 3
+^/api/learning/ 5
+
+# API endpoints - standard limits
+^/api/problems/ 10
+^/api/verification/ 8
+^/api/papers/ 15
+
+# WebSocket endpoints - higher limits for real-time
+^/ws/ 20
+
+# Health checks - no limits
+^/health 0
+^/healthz 0
+
+# Default rate limit for all other paths
+default 10

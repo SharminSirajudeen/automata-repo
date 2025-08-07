@@ -25,7 +25,7 @@ import itertools
 
 # Import base classes from jflap_complete
 from .jflap_complete import (
-    AutomatonType, State, Transition, Automaton, Grammar, Production
+    AutomatonType, State, Transition, Automaton, Grammar#, Production
 )
 
 
@@ -444,773 +444,773 @@ class UniversalTuringMachine:
 # Advanced Grammar Types
 # =====================================
 
-class UnrestrictedGrammar(Grammar):
-    """
-    Unrestricted Grammar (Type-0) with multiple symbols on left side
-    """
+# class UnrestrictedGrammar(Grammar):
+#     """
+#     Unrestricted Grammar (Type-0) with multiple symbols on left side
+#     """
     
-    def __init__(self, variables: Set[str], terminals: Set[str], 
-                 productions: List[Production], start_variable: str):
-        super().__init__(variables, terminals, productions, start_variable)
-        self.type = "unrestricted"
+#     def __init__(self, variables: Set[str], terminals: Set[str],
+#                  productions: List[Production], start_variable: str):
+#         super().__init__(variables, terminals, productions, start_variable)
+#         self.type = "unrestricted"
     
-    def add_production(self, left: str, right: str):
-        """
-        Add production with multiple symbols on left side
-        Example: "aAb" -> "aBCb"
-        """
-        # Validate that left side is not empty
-        if not left:
-            raise ValueError("Left side of production cannot be empty")
+#     def add_production(self, left: str, right: str):
+#         """
+#         Add production with multiple symbols on left side
+#         Example: "aAb" -> "aBCb"
+#         """
+#         # Validate that left side is not empty
+#         if not left:
+#             raise ValueError("Left side of production cannot be empty")
         
-        # Parse left side to identify variables and terminals
-        left_symbols = self._parse_symbols(left)
+#         # Parse left side to identify variables and terminals
+#         left_symbols = self._parse_symbols(left)
         
-        # At least one variable must be present on left side
-        has_variable = any(s in self.variables for s in left_symbols)
-        if not has_variable:
-            raise ValueError("Left side must contain at least one variable")
+#         # At least one variable must be present on left side
+#         has_variable = any(s in self.variables for s in left_symbols)
+#         if not has_variable:
+#             raise ValueError("Left side must contain at least one variable")
         
-        production = Production(left, right)
-        self.productions.append(production)
+#         production = Production(left, right)
+#         self.productions.append(production)
     
-    def _parse_symbols(self, string: str) -> List[str]:
-        """Parse string into list of symbols"""
-        symbols = []
-        i = 0
-        while i < len(string):
-            # Check for multi-character variables (if using notation like <A>)
-            if string[i] == '<':
-                j = string.find('>', i)
-                if j != -1:
-                    symbols.append(string[i:j+1])
-                    i = j + 1
-                else:
-                    symbols.append(string[i])
-                    i += 1
-            else:
-                symbols.append(string[i])
-                i += 1
-        return symbols
+#     def _parse_symbols(self, string: str) -> List[str]:
+#         """Parse string into list of symbols"""
+#         symbols = []
+#         i = 0
+#         while i < len(string):
+#             # Check for multi-character variables (if using notation like <A>)
+#             if string[i] == '<':
+#                 j = string.find('>', i)
+#                 if j != -1:
+#                     symbols.append(string[i:j+1])
+#                     i = j + 1
+#                 else:
+#                     symbols.append(string[i])
+#                     i += 1
+#             else:
+#                 symbols.append(string[i])
+#                 i += 1
+#         return symbols
     
-    def parse(self, input_string: str, max_derivations: int = 1000) -> Tuple[bool, List[str]]:
-        """
-        Parse string using unrestricted grammar
-        Uses breadth-first search with memoization
-        """
-        from collections import deque
+#     def parse(self, input_string: str, max_derivations: int = 1000) -> Tuple[bool, List[str]]:
+#         """
+#         Parse string using unrestricted grammar
+#         Uses breadth-first search with memoization
+#         """
+#         from collections import deque
         
-        visited = set()
-        queue = deque([(self.start_variable, [f"{self.start_variable}"])])
+#         visited = set()
+#         queue = deque([(self.start_variable, [f"{self.start_variable}"])])
         
-        for _ in range(max_derivations):
-            if not queue:
-                break
+#         for _ in range(max_derivations):
+#             if not queue:
+#                 break
             
-            current, derivation = queue.popleft()
+#             current, derivation = queue.popleft()
             
-            if current == input_string:
-                return True, derivation
+#             if current == input_string:
+#                 return True, derivation
             
-            if current in visited or len(current) > len(input_string) * 2:
-                continue
+#             if current in visited or len(current) > len(input_string) * 2:
+#                 continue
             
-            visited.add(current)
+#             visited.add(current)
             
-            # Try all productions
-            for production in self.productions:
-                # Find all occurrences of left side in current string
-                positions = self._find_pattern(current, production.left)
+#             # Try all productions
+#             for production in self.productions:
+#                 # Find all occurrences of left side in current string
+#                 positions = self._find_pattern(current, production.left)
                 
-                for pos in positions:
-                    # Apply production
-                    new_string = (current[:pos] + 
-                                 production.right + 
-                                 current[pos + len(production.left):])
+#                 for pos in positions:
+#                     # Apply production
+#                     new_string = (current[:pos] +
+#                                  production.right +
+#                                  current[pos + len(production.left):])
                     
-                    if new_string not in visited:
-                        new_derivation = derivation + [f"{current} => {new_string}"]
-                        queue.append((new_string, new_derivation))
+#                     if new_string not in visited:
+#                         new_derivation = derivation + [f"{current} => {new_string}"]
+#                         queue.append((new_string, new_derivation))
         
-        return False, []
+#         return False, []
     
-    def _find_pattern(self, string: str, pattern: str) -> List[int]:
-        """Find all positions where pattern occurs in string"""
-        positions = []
-        start = 0
-        while True:
-            pos = string.find(pattern, start)
-            if pos == -1:
-                break
-            positions.append(pos)
-            start = pos + 1
-        return positions
+#     def _find_pattern(self, string: str, pattern: str) -> List[int]:
+#         """Find all positions where pattern occurs in string"""
+#         positions = []
+#         start = 0
+#         while True:
+#             pos = string.find(pattern, start)
+#             if pos == -1:
+#                 break
+#             positions.append(pos)
+#             start = pos + 1
+#         return positions
     
-    def is_valid(self) -> bool:
-        """Check if grammar is valid unrestricted grammar"""
-        for production in self.productions:
-            if not production.left:
-                return False
+#     def is_valid(self) -> bool:
+#         """Check if grammar is valid unrestricted grammar"""
+#         for production in self.productions:
+#             if not production.left:
+#                 return False
             
-            # Check that left side contains at least one variable
-            left_symbols = self._parse_symbols(production.left)
-            has_variable = any(s in self.variables for s in left_symbols)
-            if not has_variable:
-                return False
+#             # Check that left side contains at least one variable
+#             left_symbols = self._parse_symbols(production.left)
+#             has_variable = any(s in self.variables for s in left_symbols)
+#             if not has_variable:
+#                 return False
         
-        return True
+#         return True
 
 
-class ContextSensitiveGrammar(UnrestrictedGrammar):
-    """
-    Context-Sensitive Grammar (Type-1) with non-contracting productions
-    """
+# class ContextSensitiveGrammar(UnrestrictedGrammar):
+#     """
+#     Context-Sensitive Grammar (Type-1) with non-contracting productions
+#     """
     
-    def __init__(self, variables: Set[str], terminals: Set[str],
-                 productions: List[Production], start_variable: str):
-        super().__init__(variables, terminals, productions, start_variable)
-        self.type = "context_sensitive"
+#     def __init__(self, variables: Set[str], terminals: Set[str],
+#                  productions: List[Production], start_variable: str):
+#         super().__init__(variables, terminals, productions, start_variable)
+#         self.type = "context_sensitive"
     
-    def add_production(self, left: str, right: str):
-        """
-        Add context-sensitive production
-        Must satisfy: |right| >= |left| (non-contracting)
-        Exception: S -> ε allowed if S doesn't appear on right side
-        """
-        # Special case: S -> ε
-        if left == self.start_variable and right == "":
-            # Check S doesn't appear on right side of any production
-            for prod in self.productions:
-                if self.start_variable in prod.right:
-                    raise ValueError(
-                        f"Start symbol {self.start_variable} cannot derive ε "
-                        "if it appears on right side of productions"
-                    )
-        elif len(right) < len(left):
-            raise ValueError(
-                f"Context-sensitive production must be non-contracting: "
-                f"|{right}| < |{left}|"
-            )
+#     def add_production(self, left: str, right: str):
+#         """
+#         Add context-sensitive production
+#         Must satisfy: |right| >= |left| (non-contracting)
+#         Exception: S -> ε allowed if S doesn't appear on right side
+#         """
+#         # Special case: S -> ε
+#         if left == self.start_variable and right == "":
+#             # Check S doesn't appear on right side of any production
+#             for prod in self.productions:
+#                 if self.start_variable in prod.right:
+#                     raise ValueError(
+#                         f"Start symbol {self.start_variable} cannot derive ε "
+#                         "if it appears on right side of productions"
+#                     )
+#         elif len(right) < len(left):
+#             raise ValueError(
+#                 f"Context-sensitive production must be non-contracting: "
+#                 f"|{right}| < |{left}|"
+#             )
         
-        super().add_production(left, right)
+#         super().add_production(left, right)
     
-    def is_valid(self) -> bool:
-        """Check if grammar is valid context-sensitive grammar"""
-        if not super().is_valid():
-            return False
+#     def is_valid(self) -> bool:
+#         """Check if grammar is valid context-sensitive grammar"""
+#         if not super().is_valid():
+#             return False
         
-        for production in self.productions:
-            # Check non-contracting property
-            if production.left == self.start_variable and production.right == "":
-                # Special case: S -> ε
-                # Check S doesn't appear on right side
-                for other_prod in self.productions:
-                    if self.start_variable in other_prod.right:
-                        return False
-            elif len(production.right) < len(production.left):
-                return False
+#         for production in self.productions:
+#             # Check non-contracting property
+#             if production.left == self.start_variable and production.right == "":
+#                 # Special case: S -> ε
+#                 # Check S doesn't appear on right side
+#                 for other_prod in self.productions:
+#                     if self.start_variable in other_prod.right:
+#                         return False
+#             elif len(production.right) < len(production.left):
+#                 return False
         
-        return True
+#         return True
     
-    def optimize_parsing(self) -> 'ContextSensitiveGrammar':
-        """
-        Optimize grammar for better parsing performance
-        Returns equivalent grammar with better properties
-        """
-        # Remove useless symbols
-        useful_vars = self._find_useful_variables()
+#     def optimize_parsing(self) -> 'ContextSensitiveGrammar':
+#         """
+#         Optimize grammar for better parsing performance
+#         Returns equivalent grammar with better properties
+#         """
+#         # Remove useless symbols
+#         useful_vars = self._find_useful_variables()
         
-        # Filter productions
-        optimized_productions = [
-            p for p in self.productions
-            if all(s in useful_vars or s in self.terminals 
-                  for s in self._parse_symbols(p.left))
-        ]
+#         # Filter productions
+#         optimized_productions = [
+#             p for p in self.productions
+#             if all(s in useful_vars or s in self.terminals
+#                   for s in self._parse_symbols(p.left))
+#         ]
         
-        return ContextSensitiveGrammar(
-            useful_vars, self.terminals, 
-            optimized_productions, self.start_variable
-        )
+#         return ContextSensitiveGrammar(
+#             useful_vars, self.terminals,
+#             optimized_productions, self.start_variable
+#         )
     
-    def _find_useful_variables(self) -> Set[str]:
-        """Find variables that contribute to derivations"""
-        # Step 1: Find generating variables (can derive terminal strings)
-        generating = set()
-        changed = True
+#     def _find_useful_variables(self) -> Set[str]:
+#         """Find variables that contribute to derivations"""
+#         # Step 1: Find generating variables (can derive terminal strings)
+#         generating = set()
+#         changed = True
         
-        while changed:
-            changed = False
-            for prod in self.productions:
-                left_vars = {s for s in self._parse_symbols(prod.left) 
-                           if s in self.variables}
-                right_symbols = self._parse_symbols(prod.right)
+#         while changed:
+#             changed = False
+#             for prod in self.productions:
+#                 left_vars = {s for s in self._parse_symbols(prod.left)
+#                            if s in self.variables}
+#                 right_symbols = self._parse_symbols(prod.right)
                 
-                # Check if right side can generate terminals
-                can_generate = all(
-                    s in self.terminals or s in generating 
-                    for s in right_symbols
-                )
+#                 # Check if right side can generate terminals
+#                 can_generate = all(
+#                     s in self.terminals or s in generating
+#                     for s in right_symbols
+#                 )
                 
-                if can_generate:
-                    for var in left_vars:
-                        if var not in generating:
-                            generating.add(var)
-                            changed = True
+#                 if can_generate:
+#                     for var in left_vars:
+#                         if var not in generating:
+#                             generating.add(var)
+#                             changed = True
         
-        # Step 2: Find reachable variables
-        reachable = {self.start_variable}
-        changed = True
+#         # Step 2: Find reachable variables
+#         reachable = {self.start_variable}
+#         changed = True
         
-        while changed:
-            changed = False
-            for prod in self.productions:
-                left_symbols = self._parse_symbols(prod.left)
-                if any(s in reachable for s in left_symbols):
-                    right_vars = {s for s in self._parse_symbols(prod.right)
-                                if s in self.variables}
-                    for var in right_vars:
-                        if var not in reachable:
-                            reachable.add(var)
-                            changed = True
+#         while changed:
+#             changed = False
+#             for prod in self.productions:
+#                 left_symbols = self._parse_symbols(prod.left)
+#                 if any(s in reachable for s in left_symbols):
+#                     right_vars = {s for s in self._parse_symbols(prod.right)
+#                                 if s in self.variables}
+#                     for var in right_vars:
+#                         if var not in reachable:
+#                             reachable.add(var)
+#                             changed = True
         
-        return generating & reachable
+#         return generating & reachable
 
 
-# =====================================
-# SLR(1) Parser Implementation
-# =====================================
+# # =====================================
+# # SLR(1) Parser Implementation
+# # =====================================
 
-@dataclass
-class LRItem:
-    """LR(0) item for parser construction"""
-    production: Production
-    dot_position: int
+# @dataclass
+# class LRItem:
+#     """LR(0) item for parser construction"""
+#     production: Production
+#     dot_position: int
     
-    def __str__(self):
-        left = self.production.left
-        right = self.production.right
-        if self.dot_position == 0:
-            return f"{left} -> •{right}"
-        elif self.dot_position >= len(right):
-            return f"{left} -> {right}•"
-        else:
-            return f"{left} -> {right[:self.dot_position]}•{right[self.dot_position:]}"
+#     def __str__(self):
+#         left = self.production.left
+#         right = self.production.right
+#         if self.dot_position == 0:
+#             return f"{left} -> •{right}"
+#         elif self.dot_position >= len(right):
+#             return f"{left} -> {right}•"
+#         else:
+#             return f"{left} -> {right[:self.dot_position]}•{right[self.dot_position:]}"
     
-    def __hash__(self):
-        return hash((self.production.left, self.production.right, self.dot_position))
+#     def __hash__(self):
+#         return hash((self.production.left, self.production.right, self.dot_position))
     
-    def __eq__(self, other):
-        return (self.production.left == other.production.left and
-                self.production.right == other.production.right and
-                self.dot_position == other.dot_position)
+#     def __eq__(self, other):
+#         return (self.production.left == other.production.left and
+#                 self.production.right == other.production.right and
+#                 self.dot_position == other.dot_position)
 
 
-class SLRParser:
-    """
-    SLR(1) Parser with complete DFA construction and parse table generation
-    """
+# class SLRParser:
+#     """
+#     SLR(1) Parser with complete DFA construction and parse table generation
+#     """
     
-    def __init__(self, grammar: Grammar):
-        self.grammar = grammar
-        self.augmented_grammar = self._augment_grammar()
-        self.first_sets: Dict[str, Set[str]] = {}
-        self.follow_sets: Dict[str, Set[str]] = {}
-        self.dfa_states: List[Set[LRItem]] = []
-        self.dfa_transitions: Dict[Tuple[int, str], int] = {}
-        self.action_table: Dict[Tuple[int, str], str] = {}
-        self.goto_table: Dict[Tuple[int, str], int] = {}
+#     def __init__(self, grammar: Grammar):
+#         self.grammar = grammar
+#         self.augmented_grammar = self._augment_grammar()
+#         self.first_sets: Dict[str, Set[str]] = {}
+#         self.follow_sets: Dict[str, Set[str]] = {}
+#         self.dfa_states: List[Set[LRItem]] = []
+#         self.dfa_transitions: Dict[Tuple[int, str], int] = {}
+#         self.action_table: Dict[Tuple[int, str], str] = {}
+#         self.goto_table: Dict[Tuple[int, str], int] = {}
         
-        # Build parser components
-        self._compute_first_sets()
-        self._compute_follow_sets()
-        self._build_dfa()
-        self._build_parse_tables()
+#         # Build parser components
+#         self._compute_first_sets()
+#         self._compute_follow_sets()
+#         self._build_dfa()
+#         self._build_parse_tables()
     
-    def _augment_grammar(self) -> Grammar:
-        """Augment grammar with new start symbol"""
-        new_start = self.grammar.start_variable + "'"
-        new_variables = self.grammar.variables | {new_start}
-        new_productions = self.grammar.productions.copy()
-        new_productions.insert(0, Production(new_start, self.grammar.start_variable))
+#     def _augment_grammar(self) -> Grammar:
+#         """Augment grammar with new start symbol"""
+#         new_start = self.grammar.start_variable + "'"
+#         new_variables = self.grammar.variables | {new_start}
+#         new_productions = self.grammar.productions.copy()
+#         new_productions.insert(0, Production(new_start, self.grammar.start_variable))
         
-        return Grammar(new_variables, self.grammar.terminals, 
-                      new_productions, new_start)
+#         return Grammar(new_variables, self.grammar.terminals,
+#                       new_productions, new_start)
     
-    def _compute_first_sets(self):
-        """Compute FIRST sets for all symbols"""
-        # Initialize FIRST sets
-        for terminal in self.augmented_grammar.terminals:
-            self.first_sets[terminal] = {terminal}
+#     def _compute_first_sets(self):
+#         """Compute FIRST sets for all symbols"""
+#         # Initialize FIRST sets
+#         for terminal in self.augmented_grammar.terminals:
+#             self.first_sets[terminal] = {terminal}
         
-        for variable in self.augmented_grammar.variables:
-            self.first_sets[variable] = set()
+#         for variable in self.augmented_grammar.variables:
+#             self.first_sets[variable] = set()
         
-        # Add epsilon for nullable variables
-        self.first_sets['ε'] = {'ε'}
+#         # Add epsilon for nullable variables
+#         self.first_sets['ε'] = {'ε'}
         
-        # Iterate until no changes
-        changed = True
-        while changed:
-            changed = False
+#         # Iterate until no changes
+#         changed = True
+#         while changed:
+#             changed = False
             
-            for production in self.augmented_grammar.productions:
-                variable = production.left
-                rhs = production.right
+#             for production in self.augmented_grammar.productions:
+#                 variable = production.left
+#                 rhs = production.right
                 
-                if rhs == 'ε' or rhs == '':
-                    if 'ε' not in self.first_sets[variable]:
-                        self.first_sets[variable].add('ε')
-                        changed = True
-                else:
-                    # Add FIRST of first symbol
-                    first_symbol = rhs[0]
-                    before_size = len(self.first_sets[variable])
+#                 if rhs == 'ε' or rhs == '':
+#                     if 'ε' not in self.first_sets[variable]:
+#                         self.first_sets[variable].add('ε')
+#                         changed = True
+#                 else:
+#                     # Add FIRST of first symbol
+#                     first_symbol = rhs[0]
+#                     before_size = len(self.first_sets[variable])
                     
-                    if first_symbol in self.first_sets:
-                        self.first_sets[variable] |= (
-                            self.first_sets[first_symbol] - {'ε'}
-                        )
+#                     if first_symbol in self.first_sets:
+#                         self.first_sets[variable] |= (
+#                             self.first_sets[first_symbol] - {'ε'}
+#                         )
                     
-                    # If first symbol is nullable, continue
-                    i = 0
-                    while (i < len(rhs) and 
-                           rhs[i] in self.first_sets and
-                           'ε' in self.first_sets[rhs[i]]):
-                        if i + 1 < len(rhs):
-                            next_symbol = rhs[i + 1]
-                            if next_symbol in self.first_sets:
-                                self.first_sets[variable] |= (
-                                    self.first_sets[next_symbol] - {'ε'}
-                                )
-                        i += 1
+#                     # If first symbol is nullable, continue
+#                     i = 0
+#                     while (i < len(rhs) and
+#                            rhs[i] in self.first_sets and
+#                            'ε' in self.first_sets[rhs[i]]):
+#                         if i + 1 < len(rhs):
+#                             next_symbol = rhs[i + 1]
+#                             if next_symbol in self.first_sets:
+#                                 self.first_sets[variable] |= (
+#                                     self.first_sets[next_symbol] - {'ε'}
+#                                 )
+#                         i += 1
                     
-                    # If all symbols are nullable, add epsilon
-                    if (i == len(rhs) and 
-                        all(s in self.first_sets and 'ε' in self.first_sets[s] 
-                            for s in rhs)):
-                        self.first_sets[variable].add('ε')
+#                     # If all symbols are nullable, add epsilon
+#                     if (i == len(rhs) and
+#                         all(s in self.first_sets and 'ε' in self.first_sets[s]
+#                             for s in rhs)):
+#                         self.first_sets[variable].add('ε')
                     
-                    if len(self.first_sets[variable]) > before_size:
-                        changed = True
+#                     if len(self.first_sets[variable]) > before_size:
+#                         changed = True
     
-    def _compute_follow_sets(self):
-        """Compute FOLLOW sets for all variables"""
-        # Initialize FOLLOW sets
-        for variable in self.augmented_grammar.variables:
-            self.follow_sets[variable] = set()
+#     def _compute_follow_sets(self):
+#         """Compute FOLLOW sets for all variables"""
+#         # Initialize FOLLOW sets
+#         for variable in self.augmented_grammar.variables:
+#             self.follow_sets[variable] = set()
         
-        # Add $ to FOLLOW(start)
-        self.follow_sets[self.augmented_grammar.start_variable].add('$')
+#         # Add $ to FOLLOW(start)
+#         self.follow_sets[self.augmented_grammar.start_variable].add('$')
         
-        # Iterate until no changes
-        changed = True
-        while changed:
-            changed = False
+#         # Iterate until no changes
+#         changed = True
+#         while changed:
+#             changed = False
             
-            for production in self.augmented_grammar.productions:
-                variable = production.left
-                rhs = production.right
+#             for production in self.augmented_grammar.productions:
+#                 variable = production.left
+#                 rhs = production.right
                 
-                for i, symbol in enumerate(rhs):
-                    if symbol in self.augmented_grammar.variables:
-                        # Add FIRST(β) to FOLLOW(symbol) where β is rest of production
-                        if i + 1 < len(rhs):
-                            beta = rhs[i + 1:]
-                            first_beta = self._compute_first_of_string(beta)
+#                 for i, symbol in enumerate(rhs):
+#                     if symbol in self.augmented_grammar.variables:
+#                         # Add FIRST(β) to FOLLOW(symbol) where β is rest of production
+#                         if i + 1 < len(rhs):
+#                             beta = rhs[i + 1:]
+#                             first_beta = self._compute_first_of_string(beta)
                             
-                            before_size = len(self.follow_sets[symbol])
-                            self.follow_sets[symbol] |= (first_beta - {'ε'})
+#                             before_size = len(self.follow_sets[symbol])
+#                             self.follow_sets[symbol] |= (first_beta - {'ε'})
                             
-                            # If β is nullable, add FOLLOW(variable)
-                            if 'ε' in first_beta:
-                                self.follow_sets[symbol] |= self.follow_sets[variable]
+#                             # If β is nullable, add FOLLOW(variable)
+#                             if 'ε' in first_beta:
+#                                 self.follow_sets[symbol] |= self.follow_sets[variable]
                             
-                            if len(self.follow_sets[symbol]) > before_size:
-                                changed = True
-                        else:
-                            # Symbol is at end, add FOLLOW(variable)
-                            before_size = len(self.follow_sets[symbol])
-                            self.follow_sets[symbol] |= self.follow_sets[variable]
+#                             if len(self.follow_sets[symbol]) > before_size:
+#                                 changed = True
+#                         else:
+#                             # Symbol is at end, add FOLLOW(variable)
+#                             before_size = len(self.follow_sets[symbol])
+#                             self.follow_sets[symbol] |= self.follow_sets[variable]
                             
-                            if len(self.follow_sets[symbol]) > before_size:
-                                changed = True
+#                             if len(self.follow_sets[symbol]) > before_size:
+#                                 changed = True
     
-    def _compute_first_of_string(self, string: str) -> Set[str]:
-        """Compute FIRST set of a string of symbols"""
-        if not string or string == 'ε':
-            return {'ε'}
+#     def _compute_first_of_string(self, string: str) -> Set[str]:
+#         """Compute FIRST set of a string of symbols"""
+#         if not string or string == 'ε':
+#             return {'ε'}
         
-        result = set()
-        all_nullable = True
+#         result = set()
+#         all_nullable = True
         
-        for symbol in string:
-            if symbol in self.first_sets:
-                result |= (self.first_sets[symbol] - {'ε'})
-                if 'ε' not in self.first_sets[symbol]:
-                    all_nullable = False
-                    break
-            else:
-                # Terminal symbol
-                result.add(symbol)
-                all_nullable = False
-                break
+#         for symbol in string:
+#             if symbol in self.first_sets:
+#                 result |= (self.first_sets[symbol] - {'ε'})
+#                 if 'ε' not in self.first_sets[symbol]:
+#                     all_nullable = False
+#                     break
+#             else:
+#                 # Terminal symbol
+#                 result.add(symbol)
+#                 all_nullable = False
+#                 break
         
-        if all_nullable:
-            result.add('ε')
+#         if all_nullable:
+#             result.add('ε')
         
-        return result
+#         return result
     
-    def _closure(self, items: Set[LRItem]) -> Set[LRItem]:
-        """Compute closure of item set"""
-        closure = items.copy()
-        added = True
+#     def _closure(self, items: Set[LRItem]) -> Set[LRItem]:
+#         """Compute closure of item set"""
+#         closure = items.copy()
+#         added = True
         
-        while added:
-            added = False
-            new_items = set()
+#         while added:
+#             added = False
+#             new_items = set()
             
-            for item in closure:
-                # Check if dot is before a variable
-                if item.dot_position < len(item.production.right):
-                    next_symbol = item.production.right[item.dot_position]
+#             for item in closure:
+#                 # Check if dot is before a variable
+#                 if item.dot_position < len(item.production.right):
+#                     next_symbol = item.production.right[item.dot_position]
                     
-                    if next_symbol in self.augmented_grammar.variables:
-                        # Add all productions for this variable
-                        for production in self.augmented_grammar.productions:
-                            if production.left == next_symbol:
-                                new_item = LRItem(production, 0)
-                                if new_item not in closure:
-                                    new_items.add(new_item)
-                                    added = True
+#                     if next_symbol in self.augmented_grammar.variables:
+#                         # Add all productions for this variable
+#                         for production in self.augmented_grammar.productions:
+#                             if production.left == next_symbol:
+#                                 new_item = LRItem(production, 0)
+#                                 if new_item not in closure:
+#                                     new_items.add(new_item)
+#                                     added = True
             
-            closure |= new_items
+#             closure |= new_items
         
-        return closure
+#         return closure
     
-    def _goto(self, items: Set[LRItem], symbol: str) -> Set[LRItem]:
-        """Compute GOTO(items, symbol)"""
-        new_items = set()
+#     def _goto(self, items: Set[LRItem], symbol: str) -> Set[LRItem]:
+#         """Compute GOTO(items, symbol)"""
+#         new_items = set()
         
-        for item in items:
-            if (item.dot_position < len(item.production.right) and
-                item.production.right[item.dot_position] == symbol):
-                new_item = LRItem(item.production, item.dot_position + 1)
-                new_items.add(new_item)
+#         for item in items:
+#             if (item.dot_position < len(item.production.right) and
+#                 item.production.right[item.dot_position] == symbol):
+#                 new_item = LRItem(item.production, item.dot_position + 1)
+#                 new_items.add(new_item)
         
-        return self._closure(new_items)
+#         return self._closure(new_items)
     
-    def _build_dfa(self):
-        """Build the LR(0) DFA"""
-        # Create initial state
-        start_production = self.augmented_grammar.productions[0]
-        initial_item = LRItem(start_production, 0)
-        initial_state = self._closure({initial_item})
+#     def _build_dfa(self):
+#         """Build the LR(0) DFA"""
+#         # Create initial state
+#         start_production = self.augmented_grammar.productions[0]
+#         initial_item = LRItem(start_production, 0)
+#         initial_state = self._closure({initial_item})
         
-        self.dfa_states = [initial_state]
-        unprocessed = [0]
+#         self.dfa_states = [initial_state]
+#         unprocessed = [0]
         
-        while unprocessed:
-            state_index = unprocessed.pop(0)
-            state = self.dfa_states[state_index]
+#         while unprocessed:
+#             state_index = unprocessed.pop(0)
+#             state = self.dfa_states[state_index]
             
-            # Find all symbols that appear after dots
-            symbols = set()
-            for item in state:
-                if item.dot_position < len(item.production.right):
-                    symbols.add(item.production.right[item.dot_position])
+#             # Find all symbols that appear after dots
+#             symbols = set()
+#             for item in state:
+#                 if item.dot_position < len(item.production.right):
+#                     symbols.add(item.production.right[item.dot_position])
             
-            # Compute GOTO for each symbol
-            for symbol in symbols:
-                new_state = self._goto(state, symbol)
+#             # Compute GOTO for each symbol
+#             for symbol in symbols:
+#                 new_state = self._goto(state, symbol)
                 
-                if new_state:
-                    # Check if state already exists
-                    try:
-                        existing_index = self.dfa_states.index(new_state)
-                        self.dfa_transitions[(state_index, symbol)] = existing_index
-                    except ValueError:
-                        # New state
-                        new_index = len(self.dfa_states)
-                        self.dfa_states.append(new_state)
-                        self.dfa_transitions[(state_index, symbol)] = new_index
-                        unprocessed.append(new_index)
+#                 if new_state:
+#                     # Check if state already exists
+#                     try:
+#                         existing_index = self.dfa_states.index(new_state)
+#                         self.dfa_transitions[(state_index, symbol)] = existing_index
+#                     except ValueError:
+#                         # New state
+#                         new_index = len(self.dfa_states)
+#                         self.dfa_states.append(new_state)
+#                         self.dfa_transitions[(state_index, symbol)] = new_index
+#                         unprocessed.append(new_index)
     
-    def _build_parse_tables(self):
-        """Build ACTION and GOTO tables"""
-        for i, state in enumerate(self.dfa_states):
-            for item in state:
-                if item.dot_position >= len(item.production.right):
-                    # Reduce item
-                    if item.production.left == self.augmented_grammar.start_variable:
-                        # Accept state
-                        self.action_table[(i, '$')] = 'accept'
-                    else:
-                        # Add reduce actions for all symbols in FOLLOW
-                        for symbol in self.follow_sets[item.production.left]:
-                            key = (i, symbol)
-                            if key in self.action_table:
-                                # Conflict! 
-                                existing = self.action_table[key]
-                                if existing.startswith('s'):
-                                    # Shift-reduce conflict
-                                    print(f"Shift-reduce conflict at {key}")
-                                else:
-                                    # Reduce-reduce conflict
-                                    print(f"Reduce-reduce conflict at {key}")
-                            else:
-                                prod_index = self.augmented_grammar.productions.index(
-                                    item.production
-                                )
-                                self.action_table[key] = f'r{prod_index}'
-                else:
-                    # Shift item
-                    next_symbol = item.production.right[item.dot_position]
+#     def _build_parse_tables(self):
+#         """Build ACTION and GOTO tables"""
+#         for i, state in enumerate(self.dfa_states):
+#             for item in state:
+#                 if item.dot_position >= len(item.production.right):
+#                     # Reduce item
+#                     if item.production.left == self.augmented_grammar.start_variable:
+#                         # Accept state
+#                         self.action_table[(i, '$')] = 'accept'
+#                     else:
+#                         # Add reduce actions for all symbols in FOLLOW
+#                         for symbol in self.follow_sets[item.production.left]:
+#                             key = (i, symbol)
+#                             if key in self.action_table:
+#                                 # Conflict!
+#                                 existing = self.action_table[key]
+#                                 if existing.startswith('s'):
+#                                     # Shift-reduce conflict
+#                                     print(f"Shift-reduce conflict at {key}")
+#                                 else:
+#                                     # Reduce-reduce conflict
+#                                     print(f"Reduce-reduce conflict at {key}")
+#                             else:
+#                                 prod_index = self.augmented_grammar.productions.index(
+#                                     item.production
+#                                 )
+#                                 self.action_table[key] = f'r{prod_index}'
+#                 else:
+#                     # Shift item
+#                     next_symbol = item.production.right[item.dot_position]
                     
-                    if next_symbol in self.augmented_grammar.terminals:
-                        # Shift action
-                        if (i, next_symbol) in self.dfa_transitions:
-                            next_state = self.dfa_transitions[(i, next_symbol)]
-                            self.action_table[(i, next_symbol)] = f's{next_state}'
-                    elif next_symbol in self.augmented_grammar.variables:
-                        # GOTO entry
-                        if (i, next_symbol) in self.dfa_transitions:
-                            next_state = self.dfa_transitions[(i, next_symbol)]
-                            self.goto_table[(i, next_symbol)] = next_state
+#                     if next_symbol in self.augmented_grammar.terminals:
+#                         # Shift action
+#                         if (i, next_symbol) in self.dfa_transitions:
+#                             next_state = self.dfa_transitions[(i, next_symbol)]
+#                             self.action_table[(i, next_symbol)] = f's{next_state}'
+#                     elif next_symbol in self.augmented_grammar.variables:
+#                         # GOTO entry
+#                         if (i, next_symbol) in self.dfa_transitions:
+#                             next_state = self.dfa_transitions[(i, next_symbol)]
+#                             self.goto_table[(i, next_symbol)] = next_state
     
-    def parse(self, input_string: str) -> Tuple[bool, List[str]]:
-        """
-        Parse input string using SLR(1) algorithm
+#     def parse(self, input_string: str) -> Tuple[bool, List[str]]:
+#         """
+#         Parse input string using SLR(1) algorithm
         
-        Returns:
-            (accepted, derivation/error)
-        """
-        # Tokenize input
-        tokens = list(input_string) + ['$']
+#         Returns:
+#             (accepted, derivation/error)
+#         """
+#         # Tokenize input
+#         tokens = list(input_string) + ['$']
         
-        # Initialize stack
-        stack = [0]  # State stack
-        symbol_stack = []  # Symbol stack for building parse tree
+#         # Initialize stack
+#         stack = [0]  # State stack
+#         symbol_stack = []  # Symbol stack for building parse tree
         
-        # Parsing
-        index = 0
-        derivation = []
+#         # Parsing
+#         index = 0
+#         derivation = []
         
-        while True:
-            state = stack[-1]
-            symbol = tokens[index]
+#         while True:
+#             state = stack[-1]
+#             symbol = tokens[index]
             
-            key = (state, symbol)
+#             key = (state, symbol)
             
-            if key not in self.action_table:
-                return False, [f"No action for state {state} and symbol '{symbol}'"]
+#             if key not in self.action_table:
+#                 return False, [f"No action for state {state} and symbol '{symbol}'"]
             
-            action = self.action_table[key]
+#             action = self.action_table[key]
             
-            if action == 'accept':
-                derivation.append("Accept")
-                return True, derivation
+#             if action == 'accept':
+#                 derivation.append("Accept")
+#                 return True, derivation
             
-            elif action.startswith('s'):
-                # Shift
-                next_state = int(action[1:])
-                stack.append(next_state)
-                symbol_stack.append(symbol)
-                index += 1
-                derivation.append(f"Shift '{symbol}' and goto state {next_state}")
+#             elif action.startswith('s'):
+#                 # Shift
+#                 next_state = int(action[1:])
+#                 stack.append(next_state)
+#                 symbol_stack.append(symbol)
+#                 index += 1
+#                 derivation.append(f"Shift '{symbol}' and goto state {next_state}")
             
-            elif action.startswith('r'):
-                # Reduce
-                prod_index = int(action[1:])
-                production = self.augmented_grammar.productions[prod_index]
+#             elif action.startswith('r'):
+#                 # Reduce
+#                 prod_index = int(action[1:])
+#                 production = self.augmented_grammar.productions[prod_index]
                 
-                # Pop |right| states
-                rhs_length = len(production.right) if production.right != 'ε' else 0
-                for _ in range(rhs_length):
-                    stack.pop()
-                    if symbol_stack:
-                        symbol_stack.pop()
+#                 # Pop |right| states
+#                 rhs_length = len(production.right) if production.right != 'ε' else 0
+#                 for _ in range(rhs_length):
+#                     stack.pop()
+#                     if symbol_stack:
+#                         symbol_stack.pop()
                 
-                # Push variable
-                symbol_stack.append(production.left)
+#                 # Push variable
+#                 symbol_stack.append(production.left)
                 
-                # GOTO
-                state = stack[-1]
-                if (state, production.left) not in self.goto_table:
-                    return False, [f"No GOTO for state {state} and {production.left}"]
+#                 # GOTO
+#                 state = stack[-1]
+#                 if (state, production.left) not in self.goto_table:
+#                     return False, [f"No GOTO for state {state} and {production.left}"]
                 
-                next_state = self.goto_table[(state, production.left)]
-                stack.append(next_state)
+#                 next_state = self.goto_table[(state, production.left)]
+#                 stack.append(next_state)
                 
-                derivation.append(
-                    f"Reduce by {production.left} -> {production.right}, "
-                    f"goto state {next_state}"
-                )
+#                 derivation.append(
+#                     f"Reduce by {production.left} -> {production.right}, "
+#                     f"goto state {next_state}"
+#                 )
             
-            else:
-                return False, [f"Invalid action: {action}"]
+#             else:
+#                 return False, [f"Invalid action: {action}"]
         
-        return False, ["Unexpected end of parsing"]
+#         return False, ["Unexpected end of parsing"]
     
-    def get_parse_tables(self) -> Dict[str, Any]:
-        """Get ACTION and GOTO tables for visualization"""
-        return {
-            'action': {f"{s},{sym}": act 
-                      for (s, sym), act in self.action_table.items()},
-            'goto': {f"{s},{var}": state 
-                    for (s, var), state in self.goto_table.items()},
-            'states': len(self.dfa_states)
-        }
+#     def get_parse_tables(self) -> Dict[str, Any]:
+#         """Get ACTION and GOTO tables for visualization"""
+#         return {
+#             'action': {f"{s},{sym}": act
+#                       for (s, sym), act in self.action_table.items()},
+#             'goto': {f"{s},{var}": state
+#                     for (s, var), state in self.goto_table.items()},
+#             'states': len(self.dfa_states)
+#         }
 
 
-# =====================================
-# GNF (Greibach Normal Form) Conversion
-# =====================================
+# # =====================================
+# # GNF (Greibach Normal Form) Conversion
+# # =====================================
 
-class GNFConverter:
-    """
-    Convert CFG to Greibach Normal Form
-    All productions are of form A -> aα where a is terminal and α is variables
-    """
+# class GNFConverter:
+#     """
+#     Convert CFG to Greibach Normal Form
+#     All productions are of form A -> aα where a is terminal and α is variables
+#     """
     
-    def __init__(self, grammar: Grammar):
-        self.grammar = grammar
-        self.gnf_grammar = None
+#     def __init__(self, grammar: Grammar):
+#         self.grammar = grammar
+#         self.gnf_grammar = None
         
-    def convert(self) -> Grammar:
-        """
-        Convert grammar to GNF
+#     def convert(self) -> Grammar:
+#         """
+#         Convert grammar to GNF
         
-        Steps:
-        1. Convert to CNF first
-        2. Order variables
-        3. Eliminate left recursion
-        4. Convert to GNF form
-        """
-        # Step 1: Start with CNF
-        from .jflap_complete import CFGProcessor
-        processor = CFGProcessor(self.grammar)
-        cnf_grammar = processor.to_chomsky_normal_form()
+#         Steps:
+#         1. Convert to CNF first
+#         2. Order variables
+#         3. Eliminate left recursion
+#         4. Convert to GNF form
+#         """
+#         # Step 1: Start with CNF
+#         from .jflap_complete import CFGProcessor
+#         processor = CFGProcessor(self.grammar)
+#         cnf_grammar = processor.to_chomsky_normal_form()
         
-        # Step 2: Order variables
-        variables = list(cnf_grammar.variables)
-        variables.sort()  # Simple lexicographic ordering
+#         # Step 2: Order variables
+#         variables = list(cnf_grammar.variables)
+#         variables.sort()  # Simple lexicographic ordering
         
-        # Step 3: Create production map
-        prod_map = defaultdict(list)
-        for production in cnf_grammar.productions:
-            prod_map[production.left].append(production.right)
+#         # Step 3: Create production map
+#         prod_map = defaultdict(list)
+#         for production in cnf_grammar.productions:
+#             prod_map[production.left].append(production.right)
         
-        # Step 4: Convert productions to GNF form
-        gnf_productions = []
+#         # Step 4: Convert productions to GNF form
+#         gnf_productions = []
         
-        for i, var in enumerate(variables):
-            for rhs in prod_map[var]:
-                if len(rhs) == 1 and rhs in cnf_grammar.terminals:
-                    # Already in GNF form (A -> a)
-                    gnf_productions.append(Production(var, rhs))
-                elif len(rhs) == 2:
-                    # CNF production A -> BC
-                    if rhs[0] in cnf_grammar.terminals:
-                        # Already starts with terminal
-                        gnf_productions.append(Production(var, rhs))
-                    else:
-                        # Need to substitute first variable
-                        first_var = rhs[0]
-                        rest = rhs[1:]
+#         for i, var in enumerate(variables):
+#             for rhs in prod_map[var]:
+#                 if len(rhs) == 1 and rhs in cnf_grammar.terminals:
+#                     # Already in GNF form (A -> a)
+#                     gnf_productions.append(Production(var, rhs))
+#                 elif len(rhs) == 2:
+#                     # CNF production A -> BC
+#                     if rhs[0] in cnf_grammar.terminals:
+#                         # Already starts with terminal
+#                         gnf_productions.append(Production(var, rhs))
+#                     else:
+#                         # Need to substitute first variable
+#                         first_var = rhs[0]
+#                         rest = rhs[1:]
                         
-                        # Substitute all productions of first_var
-                        for first_rhs in prod_map[first_var]:
-                            if first_rhs[0] in cnf_grammar.terminals:
-                                new_rhs = first_rhs + rest
-                                gnf_productions.append(Production(var, new_rhs))
-                            else:
-                                # Need recursive substitution
-                                # This is simplified - full algorithm is more complex
-                                pass
+#                         # Substitute all productions of first_var
+#                         for first_rhs in prod_map[first_var]:
+#                             if first_rhs[0] in cnf_grammar.terminals:
+#                                 new_rhs = first_rhs + rest
+#                                 gnf_productions.append(Production(var, new_rhs))
+#                             else:
+#                                 # Need recursive substitution
+#                                 # This is simplified - full algorithm is more complex
+#                                 pass
         
-        # Step 5: Handle left recursion if present
-        gnf_productions = self._eliminate_left_recursion(gnf_productions, variables)
+#         # Step 5: Handle left recursion if present
+#         gnf_productions = self._eliminate_left_recursion(gnf_productions, variables)
         
-        self.gnf_grammar = Grammar(
-            cnf_grammar.variables,
-            cnf_grammar.terminals,
-            gnf_productions,
-            cnf_grammar.start_variable
-        )
+#         self.gnf_grammar = Grammar(
+#             cnf_grammar.variables,
+#             cnf_grammar.terminals,
+#             gnf_productions,
+#             cnf_grammar.start_variable
+#         )
         
-        return self.gnf_grammar
+#         return self.gnf_grammar
     
-    def _eliminate_left_recursion(self, productions: List[Production], 
-                                  variables: List[str]) -> List[Production]:
-        """
-        Eliminate left recursion from productions
+#     def _eliminate_left_recursion(self, productions: List[Production],
+#                                   variables: List[str]) -> List[Production]:
+#         """
+#         Eliminate left recursion from productions
         
-        For A -> Aα | β, convert to:
-        A -> βA'
-        A' -> αA' | ε
-        """
-        new_productions = []
-        new_variables = set()
+#         For A -> Aα | β, convert to:
+#         A -> βA'
+#         A' -> αA' | ε
+#         """
+#         new_productions = []
+#         new_variables = set()
         
-        for var in variables:
-            # Find productions for this variable
-            var_prods = [p for p in productions if p.left == var]
+#         for var in variables:
+#             # Find productions for this variable
+#             var_prods = [p for p in productions if p.left == var]
             
-            # Separate into recursive and non-recursive
-            recursive = []
-            non_recursive = []
+#             # Separate into recursive and non-recursive
+#             recursive = []
+#             non_recursive = []
             
-            for prod in var_prods:
-                if prod.right and prod.right[0] == var:
-                    recursive.append(prod.right[1:])  # α part
-                else:
-                    non_recursive.append(prod.right)  # β part
+#             for prod in var_prods:
+#                 if prod.right and prod.right[0] == var:
+#                     recursive.append(prod.right[1:])  # α part
+#                 else:
+#                     non_recursive.append(prod.right)  # β part
             
-            if recursive:
-                # Has left recursion - eliminate it
-                new_var = var + "'"
-                new_variables.add(new_var)
+#             if recursive:
+#                 # Has left recursion - eliminate it
+#                 new_var = var + "'"
+#                 new_variables.add(new_var)
                 
-                # Add A -> βA' productions
-                for beta in non_recursive:
-                    new_productions.append(Production(var, beta + new_var))
+#                 # Add A -> βA' productions
+#                 for beta in non_recursive:
+#                     new_productions.append(Production(var, beta + new_var))
                 
-                # Add A' -> αA' | ε productions
-                for alpha in recursive:
-                    new_productions.append(Production(new_var, alpha + new_var))
-                new_productions.append(Production(new_var, "ε"))
-            else:
-                # No left recursion - keep as is
-                new_productions.extend(var_prods)
+#                 # Add A' -> αA' | ε productions
+#                 for alpha in recursive:
+#                     new_productions.append(Production(new_var, alpha + new_var))
+#                 new_productions.append(Production(new_var, "ε"))
+#             else:
+#                 # No left recursion - keep as is
+#                 new_productions.extend(var_prods)
         
-        return new_productions
+#         return new_productions
     
-    def verify_gnf(self) -> bool:
-        """Verify that grammar is in GNF"""
-        if not self.gnf_grammar:
-            return False
+#     def verify_gnf(self) -> bool:
+#         """Verify that grammar is in GNF"""
+#         if not self.gnf_grammar:
+#             return False
         
-        for production in self.gnf_grammar.productions:
-            rhs = production.right
+#         for production in self.gnf_grammar.productions:
+#             rhs = production.right
             
-            # Check if it's epsilon production (only allowed for start)
-            if rhs == "ε":
-                if production.left != self.gnf_grammar.start_variable:
-                    return False
-                # Check start doesn't appear on right
-                for other_prod in self.gnf_grammar.productions:
-                    if self.gnf_grammar.start_variable in other_prod.right:
-                        return False
-            # Check if starts with terminal
-            elif not rhs or rhs[0] not in self.gnf_grammar.terminals:
-                return False
-            # Check rest are variables
-            elif len(rhs) > 1:
-                for symbol in rhs[1:]:
-                    if symbol not in self.gnf_grammar.variables:
-                        return False
+#             # Check if it's epsilon production (only allowed for start)
+#             if rhs == "ε":
+#                 if production.left != self.gnf_grammar.start_variable:
+#                     return False
+#                 # Check start doesn't appear on right
+#                 for other_prod in self.gnf_grammar.productions:
+#                     if self.gnf_grammar.start_variable in other_prod.right:
+#                         return False
+#             # Check if starts with terminal
+#             elif not rhs or rhs[0] not in self.gnf_grammar.terminals:
+#                 return False
+#             # Check rest are variables
+#             elif len(rhs) > 1:
+#                 for symbol in rhs[1:]:
+#                     if symbol not in self.gnf_grammar.variables:
+#                         return False
         
-        return True
+#         return True
 
 
 # =====================================

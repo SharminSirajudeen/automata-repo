@@ -88,7 +88,7 @@ class ValidatedAutomaton(BaseModel):
 class ValidatedProblemInput(BaseModel):
     """Validated problem input."""
     text: str = Field(..., min_length=1, max_length=10000)
-    problem_type: Optional[str] = Field(None, regex=r'^(dfa|nfa|pda|cfg|tm|regex|pumping_lemma)$')
+    problem_type: Optional[str] = Field(None, pattern=r'^(dfa|nfa|pda|cfg|tm|regex|pumping_lemma)$')
     
     @validator('text')
     def sanitize_text(cls, v):
@@ -97,6 +97,12 @@ class ValidatedProblemInput(BaseModel):
         # Limit consecutive whitespace
         v = re.sub(r'\s+', ' ', v)
         return v.strip()
+
+
+class SolutionCreate(BaseModel):
+    """Pydantic model for creating a solution."""
+    user_id: str
+    automaton: Dict[str, Any]
 
 
 class ValidatedTestCase(BaseModel):
@@ -111,6 +117,15 @@ class ValidatedTestCase(BaseModel):
         if any(ord(char) < 32 and char not in '\n\r\t' for char in v):
             raise ValueError('Input contains invalid control characters')
         return v
+
+
+class ValidationResult(BaseModel):
+    """Structured result of a validation check."""
+    is_correct: bool
+    score: float = Field(..., ge=0.0, le=1.0)
+    feedback: str
+    test_results: List[Dict[str, Any]]
+    mistakes: List[str]
 
 
 def validate_automaton_type(automaton: Dict[str, Any], expected_type: str) -> Dict[str, Any]:

@@ -1,36 +1,101 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: automata-config
+  name: automata-backend-config
   namespace: automata-app
   labels:
-    app.kubernetes.io/name: automata
-    app.kubernetes.io/component: config
+    app: automata-backend
+    component: backend
 data:
   # Database configuration
-  POSTGRES_DB: "automata_db"
-  POSTGRES_USER: "automata"
+  database-host: "automata-postgres"
+  database-port: "5432"
+  database-name: "automata_db"
+  database-user: "automata"
+  database-pool-size: "20"
+  database-max-overflow: "30"
   
-  # Redis configuration
-  REDIS_HOST: "redis-service"
-  REDIS_PORT: "6379"
+  # Valkey configuration (Redis alternative)
+  VALKEY_HOST: "valkey-service"
+  VALKEY_PORT: "6379"
+  valkey-cache-ttl: "3600"
+  valkey-max-connections: "20"
   
-  # Application configuration
-  CORS_ORIGINS: "https://automata.example.com,https://www.automata.example.com"
-  LOG_LEVEL: "INFO"
-  
-  # CDN configuration
-  CDN_ENABLED: "true"
-  CDN_BASE_URL: "https://cdn.automata.example.com"
+  # API configuration
+  api-host: "0.0.0.0"
+  api-port: "8000"
+  cors-origins: "https://automata.vast.ai,https://automata-prod.vast.ai"
   
   # Performance settings
-  POOL_SIZE: "20"
-  MAX_OVERFLOW: "30"
-  POOL_TIMEOUT: "30"
+  workers: "2"
+  worker-class: "uvicorn.workers.UvicornWorker"
+  max-requests: "1000"
+  max-requests-jitter: "100"
+  timeout: "120"
+  keepalive: "2"
+  
+  # Feature flags
+  enable-ai-features: "true"
+  enable-jflap-integration: "true"
+  enable-proof-assistant: "true"
+  enable-websockets: "true"
+  
+  # Logging configuration
+  log-level: "info"
+  access-log: "true"
+  log-format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  
+  # AI/ML configuration
+  ollama-base-url: "http://ollama-service:11434"
+  openai-model: "gpt-4"
+  openai-max-tokens: "4096"
   
   # Monitoring
-  ENABLE_METRICS: "true"
-  METRICS_PORT: "9090"
+  prometheus-metrics: "true"
+  health-check-interval: "30"
+  
+  # Security
+  jwt-algorithm: "HS256"
+  jwt-expire-minutes: "60"
+  password-min-length: "8"
+  
+  # File upload limits
+  max-file-size: "10485760"  # 10MB
+  allowed-file-types: ".pdf,.txt,.json,.xml"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: automata-frontend-config
+  namespace: automata-app
+  labels:
+    app: automata-frontend
+    component: frontend
+data:
+  # API endpoints
+  vite-api-url: "https://api.automata.vast.ai"
+  vite-ws-url: "wss://api.automata.vast.ai/ws"
+  vite-app-title: "Automata Theory Learning Platform"
+  
+  # Feature flags
+  vite-enable-ai-tutor: "true"
+  vite-enable-collaborative-editing: "true"
+  vite-enable-google-drive-sync: "true"
+  vite-enable-advanced-animations: "true"
+  
+  # Performance settings
+  vite-chunk-size-warning-limit: "1000"
+  vite-build-target: "esnext"
+  
+  # UI configuration
+  vite-theme-default: "system"
+  vite-animation-duration: "300"
+  vite-debounce-delay: "500"
+  
+  # Analytics (if needed)
+  vite-enable-analytics: "false"
+  vite-sentry-dsn: ""
 
 ---
 apiVersion: v1
@@ -39,37 +104,44 @@ metadata:
   name: nginx-config
   namespace: automata-app
   labels:
-    app.kubernetes.io/name: automata
-    app.kubernetes.io/component: nginx
+    app: automata-frontend
+    component: nginx
 data:
   default.conf: |
     upstream backend {
         least_conn;
-        server backend-service:8000 max_fails=3 fail_timeout=30s;
+        server automata-backend:8000 max_fails=3 fail_timeout=30s;
         keepalive 32;
     }
+    
+    # Rate limiting zones
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=static:10m rate=50r/s;
     
     server {
         listen 80;
         server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
         
         # Security headers
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss: http: https:; font-src 'self' data:;" always;
         
         # Gzip compression
         gzip on;
         gzip_vary on;
-        gzip_min_length 1000;
+        gzip_min_length 1024;
         gzip_types
             text/plain
             text/css
             text/xml
             text/javascript
-            application/xml+rss
             application/javascript
+            application/xml+rss
             application/json
             image/svg+xml;
         
@@ -80,18 +152,19 @@ data:
             add_header Vary "Accept-Encoding";
         }
         
-        # API routes
+        # API routes with rate limiting
         location /api/ {
-            proxy_pass http://backend;
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass http://backend/;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
             
             # Connection settings
-            proxy_connect_timeout 30s;
-            proxy_send_timeout 30s;
-            proxy_read_timeout 30s;
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
             
             # Buffer settings
             proxy_buffering on;
@@ -101,7 +174,7 @@ data:
         }
         
         # WebSocket support
-        location /ws/ {
+        location /ws {
             proxy_pass http://backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
@@ -110,6 +183,8 @@ data:
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
         }
         
         # Health check
@@ -119,8 +194,9 @@ data:
             add_header Content-Type text/plain;
         }
         
-        # Frontend SPA
+        # Frontend SPA with rate limiting
         location / {
+            limit_req zone=static burst=100 nodelay;
             try_files $uri $uri/ /index.html;
             add_header Cache-Control "no-cache, no-store, must-revalidate";
             add_header Pragma "no-cache";

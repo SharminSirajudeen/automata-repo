@@ -17,7 +17,7 @@ import pickle
 from langchain.memory import ConversationSummaryBufferMemory
 from langchain_community.llms import Ollama
 
-from .ai_config import get_ai_config
+from .ai_config import get_ai_config, ModelType
 from .orchestrator import orchestrator, ExecutionMode
 
 logger = logging.getLogger(__name__)
@@ -719,7 +719,7 @@ class WorkingMemory:
 
 # Global instances
 memory_store = InMemoryStore()  # Use Redis in production
-conversation_memory = ConversationMemoryManager(memory_store)
+memory_manager = ConversationMemoryManager(memory_store)
 long_term_memory = LongTermMemory(memory_store)
 preference_manager = UserPreferenceManager(memory_store)
 working_memory = WorkingMemory()

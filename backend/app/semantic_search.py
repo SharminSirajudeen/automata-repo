@@ -16,7 +16,6 @@ import asyncio
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
-from sentence_transformers import SentenceTransformer
 import ollama
 
 from .ai_config import get_ai_config
@@ -105,11 +104,6 @@ class ChromaDBManager:
                 anonymized_telemetry=False,
                 allow_reset=True
             )
-        )
-        
-        # Initialize embedding model
-        self.embedding_model = SentenceTransformer(
-            self.config.vector_db.embedding_model
         )
         
         # Initialize Ollama embedding function
@@ -576,18 +570,28 @@ class KnowledgeGraphBuilder:
         doc1: Document,
         doc2: Document
     ) -> float:
-        """Calculate similarity between two documents."""
-        # Use embedding similarity
-        embeddings = self.search_engine.db_manager.embedding_model.encode(
-            [doc1.content, doc2.content]
-        )
-        
-        # Cosine similarity
-        similarity = np.dot(embeddings[0], embeddings[1]) / (
-            np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
-        )
-        
-        return float(similarity)
+        """Calculate similarity between two documents using Ollama embeddings."""
+        try:
+            # Generate embeddings via Ollama API
+            embedding1 = ollama.embeddings(
+                model=self.search_engine.db_manager.config.vector_db.embedding_model,
+                prompt=doc1.content
+            )['embedding']
+
+            embedding2 = ollama.embeddings(
+                model=self.search_engine.db_manager.config.vector_db.embedding_model,
+                prompt=doc2.content
+            )['embedding']
+
+            # Cosine similarity
+            similarity = np.dot(embedding1, embedding2) / (
+                np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
+            )
+
+            return float(similarity)
+        except Exception as e:
+            logger.error(f"Failed to calculate similarity between {doc1.id} and {doc2.id}: {e}")
+            return 0.0
     
     async def _determine_relationship(
         self,

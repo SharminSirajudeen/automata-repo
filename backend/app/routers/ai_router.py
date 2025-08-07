@@ -15,10 +15,10 @@ from ..orchestrator import orchestrate_task
 from ..ai_proof_assistant import (
     proof_generator, ProofTechnique, ProofStep, ProofStatus
 )
-from ..semantic_search import semantic_search_engine
-from ..rag_system import rag_system
+from ..semantic_search import search_engine, Document
+from ..rag_system import rag_chain
 from ..memory import memory_manager
-from ..optimizer import ai_optimizer
+from ..optimizer import automata_optimizer as ai_optimizer
 from ..ai_config import TaskComplexity
 from ..config import settings
 
@@ -246,7 +246,7 @@ async def translate_proof(
 async def add_document(request: DocumentRequest):
     """Add a document to the semantic search index"""
     try:
-        doc_id = await semantic_search_engine.add_document(
+        doc_id = await search_engine.add_document(
             content=request.content,
             metadata=request.metadata or {}
         )
@@ -265,7 +265,7 @@ async def add_document(request: DocumentRequest):
 async def search_documents(request: QueryRequest):
     """Search documents using semantic similarity"""
     try:
-        results = await semantic_search_engine.search(
+        results = await search_engine.search(
             query=request.query,
             limit=request.limit,
             threshold=request.threshold
@@ -285,7 +285,7 @@ async def search_documents(request: QueryRequest):
 async def recommend_content(request: QueryRequest):
     """Get content recommendations based on query"""
     try:
-        recommendations = await semantic_search_engine.recommend(
+        recommendations = await search_engine.recommend(
             query=request.query,
             limit=request.limit
         )
@@ -305,9 +305,8 @@ async def recommend_content(request: QueryRequest):
 async def rag_query(request: QueryRequest):
     """Query using RAG (Retrieval-Augmented Generation)"""
     try:
-        response = await rag_system.query(
-            query=request.query,
-            limit=request.limit
+        response = await rag_chain.query(
+            request
         )
         
         return {
@@ -325,10 +324,8 @@ async def rag_query(request: QueryRequest):
 async def add_knowledge(request: KnowledgeRequest):
     """Add knowledge to the RAG system"""
     try:
-        knowledge_id = await rag_system.add_knowledge(
-            content=request.content,
-            source=request.source,
-            tags=request.tags or []
+        knowledge_id = await rag_chain.add_documents(
+            [Document(content=request.content, metadata={"source": request.source, "tags": request.tags or []})]
         )
         
         return {
@@ -468,7 +465,7 @@ async def ai_health():
             "orchestrator": "healthy",
             "proof_generator": "healthy",
             "semantic_search": "healthy",
-            "rag_system": "healthy",
+            "rag_chain": "healthy",
             "memory_manager": "healthy",
             "ai_optimizer": "healthy"
         }

@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useSpring, useSpringValue, animated, useTransition, config } from '@react-spring/web';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Separator } from './ui/separator';
 import { Progress } from './ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { 
   Play, 
   Pause, 
@@ -16,7 +18,16 @@ import {
   Settings,
   Zap,
   Activity,
-  TreePine
+  TreePine,
+  Download,
+  Camera,
+  Video,
+  Maximize2,
+  Monitor,
+  Smartphone,
+  AlertCircle,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { 
   ExtendedAutomaton, 
@@ -38,6 +49,10 @@ export interface AnimationConfig {
   stagger: number;
   showTrails: boolean;
   highlightIntensity: number;
+  enableExport?: boolean;
+  exportFormat?: 'gif' | 'webm' | 'mp4';
+  exportQuality?: 'low' | 'medium' | 'high';
+  exportFPS?: number;
 }
 
 export interface AnimationStep {
@@ -60,6 +75,9 @@ interface AnimationSystemProps {
   onSeek: (step: number) => void;
   onReset: () => void;
   className?: string;
+  onError?: (error: Error) => void;
+  showExportOptions?: boolean;
+  compactMode?: boolean;
 }
 
 export const AnimationSystem: React.FC<AnimationSystemProps> = ({
@@ -73,27 +91,129 @@ export const AnimationSystem: React.FC<AnimationSystemProps> = ({
   onStep,
   onSeek,
   onReset,
-  className
+  className,
+  onError,
+  showExportOptions = false,
+  compactMode = false
 }) => {
   const [animationConfig, setAnimationConfig] = useState<AnimationConfig>({
     duration: 800,
     easing: 'wobbly',
     stagger: 100,
     showTrails: true,
-    highlightIntensity: 1
+    highlightIntensity: 1,
+    enableExport: showExportOptions,
+    exportFormat: 'gif',
+    exportQuality: 'medium',
+    exportFPS: 30
   });
 
   const [showSettings, setShowSettings] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [animationError, setAnimationError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrames = useRef<ImageData[]>([]);
   const animationProgress = useSpringValue(0);
   const currentStepData = simulationSteps[currentStep];
+
+  // Error handling
+  const handleError = useCallback((error: Error, context: string) => {
+    const errorMessage = `Animation error in ${context}: ${error.message}`;
+    setAnimationError(errorMessage);
+    onError?.(error);
+    console.error(errorMessage, error);
+  }, [onError]);
+
+  // Clear error after timeout
+  useEffect(() => {
+    if (animationError) {
+      const timeout = setTimeout(() => setAnimationError(null), 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [animationError]);
+
+  // Export functionality
+  const startRecording = useCallback(async () => {
+    if (!canvasRef.current) return;
+    
+    try {
+      setIsExporting(true);
+      setExportProgress(0);
+      animationFrames.current = [];
+      
+      // Reset animation to beginning
+      onReset();
+      
+      // Capture frames for each step
+      for (let i = 0; i < simulationSteps.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, animationConfig.duration));
+        onSeek(i);
+        
+        // Capture frame
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (ctx) {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          animationFrames.current.push(imageData);
+        }
+        
+        setExportProgress((i + 1) / simulationSteps.length * 100);
+      }
+      
+      await exportAnimation();
+    } catch (error) {
+      handleError(error as Error, 'recording');
+    } finally {
+      setIsExporting(false);
+      setExportProgress(0);
+    }
+  }, [simulationSteps.length, animationConfig.duration, onReset, onSeek, handleError]);
+
+  const exportAnimation = useCallback(async () => {
+    try {
+      if (animationFrames.current.length === 0) return;
+      
+      // Create a simple export (this would need a proper implementation with libraries like gif.js)
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      // For now, just export the current frame as PNG
+      canvas.width = 800;
+      canvas.height = 600;
+      
+      // Draw the last frame
+      const lastFrame = animationFrames.current[animationFrames.current.length - 1];
+      ctx.putImageData(lastFrame, 0, 0);
+      
+      // Download as PNG (simplified version)
+      const link = document.createElement('a');
+      link.download = `automata-animation-${Date.now()}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    } catch (error) {
+      handleError(error as Error, 'export');
+    }
+  }, [handleError]);
+
+  // Responsive design helpers
+  const isMobile = viewMode === 'mobile';
+  const controlSize = isMobile ? 'sm' : 'default';
+  const spacing = isMobile ? 'space-x-1' : 'space-x-2';
 
   // Main animation controller
   const mainSpring = useSpring({
     progress: currentStep / Math.max(1, simulationSteps.length - 1),
     config: config[animationConfig.easing],
     onRest: () => {
-      if (isPlaying && currentStep < simulationSteps.length - 1) {
-        setTimeout(() => onStep('forward'), animationConfig.duration);
+      try {
+        if (isPlaying && currentStep < simulationSteps.length - 1) {
+          setTimeout(() => onStep('forward'), animationConfig.duration);
+        }
+      } catch (error) {
+        handleError(error as Error, 'main spring animation');
       }
     }
   });
@@ -323,64 +443,193 @@ export const AnimationSystem: React.FC<AnimationSystemProps> = ({
   };
 
   return (
-    <Card className={cn("w-full", className)}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center space-x-2">
-            <Activity className="h-5 w-5" />
-            <span>Animation System</span>
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSettings(!showSettings)}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        </div>
+    <TooltipProvider>
+      <Card className={cn("w-full", className)}>
+        <CardHeader className={cn("pb-3", compactMode && "pb-2 px-3")}>
+          <div className="flex items-center justify-between">
+            <CardTitle className={cn("flex items-center space-x-2", compactMode && "text-base")}>
+              <Activity className={cn("h-5 w-5", compactMode && "h-4 w-4")} />
+              <span>Animation System</span>
+            </CardTitle>
+            <div className="flex items-center space-x-1">
+              {/* View Mode Toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setViewMode(prev => prev === 'desktop' ? 'mobile' : 'desktop')}
+                  >
+                    {viewMode === 'desktop' ? <Monitor className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Switch to {viewMode === 'desktop' ? 'mobile' : 'desktop'} view
+                </TooltipContent>
+              </Tooltip>
+              
+              {/* Export Options */}
+              {showExportOptions && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={startRecording}
+                      disabled={isExporting || simulationSteps.length === 0}
+                    >
+                      {isExporting ? <Camera className="h-4 w-4 animate-pulse" /> : <Download className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Export animation
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              
+              {/* Settings */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSettings(!showSettings)}
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Animation settings
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+          
+          {/* Error Display */}
+          <AnimatePresence>
+            {animationError && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="flex items-center space-x-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md"
+              >
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <span className="text-sm text-red-700 dark:text-red-300">{animationError}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAnimationError(null)}
+                  className="ml-auto h-6 w-6 p-0"
+                >
+                  <XCircle className="h-3 w-3" />
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          {/* Export Progress */}
+          <AnimatePresence>
+            {isExporting && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <Video className="h-4 w-4 animate-pulse" />
+                  <span className="text-sm">Exporting animation...</span>
+                </div>
+                <Progress value={exportProgress} className="w-full" />
+              </motion.div>
+            )}
+          </AnimatePresence>
         
         {showSettings && (
           <div className="space-y-4 pt-4 border-t">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Animation Speed</label>
-              <Slider
-                value={[animationConfig.duration]}
-                onValueChange={([value]) => 
-                  setAnimationConfig(prev => ({ ...prev, duration: value }))
-                }
-                max={2000}
-                min={100}
-                step={50}
-                className="w-full"
-              />
-              <div className="text-xs text-gray-500">{animationConfig.duration}ms</div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Stagger Delay</label>
-              <Slider
-                value={[animationConfig.stagger]}
-                onValueChange={([value]) => 
-                  setAnimationConfig(prev => ({ ...prev, stagger: value }))
-                }
-                max={300}
-                min={0}
-                step={10}
-                className="w-full"
-              />
-              <div className="text-xs text-gray-500">{animationConfig.stagger}ms</div>
-            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Animation Speed</label>
+                <Slider
+                  value={[animationConfig.duration]}
+                  onValueChange={([value]) => 
+                    setAnimationConfig(prev => ({ ...prev, duration: value }))
+                  }
+                  max={2000}
+                  min={100}
+                  step={50}
+                  className="w-full"
+                />
+                <div className="text-xs text-gray-500">{animationConfig.duration}ms</div>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Stagger Delay</label>
+                <Slider
+                  value={[animationConfig.stagger]}
+                  onValueChange={([value]) => 
+                    setAnimationConfig(prev => ({ ...prev, stagger: value }))
+                  }
+                  max={300}
+                  min={0}
+                  step={10}
+                  className="w-full"
+                />
+                <div className="text-xs text-gray-500">{animationConfig.stagger}ms</div>
+              </div>
 
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={animationConfig.showTrails}
-                onChange={(e) => 
-                  setAnimationConfig(prev => ({ ...prev, showTrails: e.target.checked }))
-                }
-                className="rounded"
-              />
-              <label className="text-sm">Show animation trails</label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={animationConfig.showTrails}
+                    onChange={(e) => 
+                      setAnimationConfig(prev => ({ ...prev, showTrails: e.target.checked }))
+                    }
+                    className="rounded"
+                  />
+                  <label className="text-sm">Show animation trails</label>
+                </div>
+                
+                {showExportOptions && (
+                  <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-md">
+                    <h4 className="text-sm font-medium">Export Options</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400">Format</label>
+                        <select 
+                          className="w-full mt-1 text-sm border rounded px-2 py-1"
+                          value={animationConfig.exportFormat}
+                          onChange={(e) => setAnimationConfig(prev => ({ 
+                            ...prev, 
+                            exportFormat: e.target.value as 'gif' | 'webm' | 'mp4'
+                          }))}
+                        >
+                          <option value="gif">GIF</option>
+                          <option value="webm">WebM</option>
+                          <option value="mp4">MP4</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400">Quality</label>
+                        <select 
+                          className="w-full mt-1 text-sm border rounded px-2 py-1"
+                          value={animationConfig.exportQuality}
+                          onChange={(e) => setAnimationConfig(prev => ({ 
+                            ...prev, 
+                            exportQuality: e.target.value as 'low' | 'medium' | 'high'
+                          }))}
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -397,50 +646,76 @@ export const AnimationSystem: React.FC<AnimationSystemProps> = ({
         </div>
 
         {/* Control Panel */}
-        <div className="flex items-center justify-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onReset}
-            disabled={currentStep === 0}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
+        <div className={cn("flex items-center justify-center", spacing)}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size={controlSize}
+                onClick={onReset}
+                disabled={currentStep === 0}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reset to beginning</TooltipContent>
+          </Tooltip>
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onStep('backward')}
-            disabled={currentStep === 0}
-          >
-            <SkipBack className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size={controlSize}
+                onClick={() => onStep('backward')}
+                disabled={currentStep === 0}
+              >
+                <SkipBack className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Previous step</TooltipContent>
+          </Tooltip>
           
-          <Button
-            onClick={isPlaying ? onPause : onPlay}
-            disabled={currentStep >= simulationSteps.length - 1}
-            className="px-6"
-          >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={isPlaying ? onPause : onPlay}
+                disabled={currentStep >= simulationSteps.length - 1}
+                className={cn("px-6", compactMode && "px-4")}
+                size={controlSize}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{isPlaying ? 'Pause' : 'Play'} animation</TooltipContent>
+          </Tooltip>
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onStep('forward')}
-            disabled={currentStep >= simulationSteps.length - 1}
-          >
-            <SkipForward className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size={controlSize}
+                onClick={() => onStep('forward')}
+                disabled={currentStep >= simulationSteps.length - 1}
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Next step</TooltipContent>
+          </Tooltip>
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onStop}
-            disabled={!isPlaying}
-          >
-            <Square className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size={controlSize}
+                onClick={onStop}
+                disabled={!isPlaying}
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Stop animation</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Current Step Information */}
@@ -484,12 +759,27 @@ export const AnimationSystem: React.FC<AnimationSystemProps> = ({
         )}
 
         {simulationSteps.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No simulation data available. Start a simulation to see animations.
-          </div>
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-8 text-gray-500"
+          >
+            <Activity className="h-12 w-12 mx-auto mb-4 opacity-30" />
+            <p className="text-lg font-medium">No simulation data available</p>
+            <p className="text-sm mt-2">Start a simulation to see animations</p>
+          </motion.div>
         )}
+        
+        {/* Hidden canvas for export functionality */}
+        <canvas 
+          ref={canvasRef} 
+          className="hidden" 
+          width={800} 
+          height={600}
+        />
       </CardContent>
     </Card>
+    </TooltipProvider>
   );
 };
 

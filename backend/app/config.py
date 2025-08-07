@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     # Database Configuration
     database_url: str = "postgresql://automata:password@localhost/automata_db"
     
-    # Redis Configuration
-    redis_url: str = "redis://localhost:6379"
+    # Valkey Configuration
+    valkey_url: str = "valkey://localhost:6379"
     
     # Ollama Configuration
     ollama_base_url: str = "http://localhost:11434"

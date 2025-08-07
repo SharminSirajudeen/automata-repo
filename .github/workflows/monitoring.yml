@@ -1,0 +1,338 @@
+name: 📊 Monitoring & Health Checks
+
+on:
+  schedule:
+    # Run every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+env:
+  PRODUCTION_URL: https://automata.vast.ai
+  STAGING_URL: https://staging.automata.vast.ai
+  API_TIMEOUT: 30
+
+jobs:
+  # Production health monitoring
+  production-health:
+    name: 🏭 Production Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🩺 Frontend Health Check
+      id: frontend-check
+      run: |
+        echo "Checking frontend health..."
+        response=$(curl -s -o /dev/null -w "%{http_code}:%{time_total}" --max-time ${{ env.API_TIMEOUT }} ${{ env.PRODUCTION_URL }}/health)
+        status_code=$(echo $response | cut -d: -f1)
+        response_time=$(echo $response | cut -d: -f2)
+        
+        if [ "$status_code" = "200" ]; then
+          echo "✅ Frontend is healthy (${response_time}s)"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          echo "response_time=$response_time" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Frontend is unhealthy (HTTP $status_code)"
+          echo "status=unhealthy" >> $GITHUB_OUTPUT
+          echo "response_time=$response_time" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 🩺 Backend API Health Check
+      id: backend-check
+      run: |
+        echo "Checking backend API health..."
+        response=$(curl -s -o /dev/null -w "%{http_code}:%{time_total}" --max-time ${{ env.API_TIMEOUT }} ${{ env.PRODUCTION_URL }}/api/health)
+        status_code=$(echo $response | cut -d: -f1)
+        response_time=$(echo $response | cut -d: -f2)
+        
+        if [ "$status_code" = "200" ]; then
+          echo "✅ Backend API is healthy (${response_time}s)"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          echo "response_time=$response_time" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Backend API is unhealthy (HTTP $status_code)"
+          echo "status=unhealthy" >> $GITHUB_OUTPUT
+          echo "response_time=$response_time" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 🩺 Database Connection Check
+      id: db-check
+      run: |
+        echo "Checking database connectivity via API..."
+        response=$(curl -s --max-time ${{ env.API_TIMEOUT }} ${{ env.PRODUCTION_URL }}/api/health/db)
+        
+        if echo "$response" | grep -q '"database.*healthy"'; then
+          echo "✅ Database connection is healthy"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Database connection issue detected"
+          echo "status=unhealthy" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 🩺 Redis Cache Check
+      id: redis-check
+      run: |
+        echo "Checking Redis cache via API..."
+        response=$(curl -s --max-time ${{ env.API_TIMEOUT }} ${{ env.PRODUCTION_URL }}/api/health/cache)
+        
+        if echo "$response" | grep -q '"cache.*healthy"'; then
+          echo "✅ Redis cache is healthy"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Redis cache issue detected"
+          echo "status=unhealthy" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 🚨 Create Issue on Failure
+      if: steps.frontend-check.outputs.status == 'unhealthy' || steps.backend-check.outputs.status == 'unhealthy' || steps.db-check.outputs.status == 'unhealthy' || steps.redis-check.outputs.status == 'unhealthy'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const title = '🚨 Production Health Check Failed';
+          const body = `
+          ## Health Check Failure Detected
+          
+          **Time**: ${new Date().toISOString()}
+          **Environment**: Production
+          
+          ### Status Report:
+          - **Frontend**: ${{ steps.frontend-check.outputs.status }} (${{ steps.frontend-check.outputs.response_time }}s)
+          - **Backend API**: ${{ steps.backend-check.outputs.status }} (${{ steps.backend-check.outputs.response_time }}s)
+          - **Database**: ${{ steps.db-check.outputs.status }}
+          - **Redis Cache**: ${{ steps.redis-check.outputs.status }}
+          
+          ### Actions Required:
+          1. Check vast.ai instance status
+          2. Verify Kubernetes cluster health
+          3. Check application logs
+          4. Validate external dependencies
+          
+          **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          `;
+          
+          // Check if issue already exists
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['health-check', 'production'],
+            state: 'open'
+          });
+          
+          if (issues.data.length === 0) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['health-check', 'production', 'urgent']
+            });
+          }
+
+    - name: 📊 Update Status Badge
+      run: |
+        frontend_status="${{ steps.frontend-check.outputs.status }}"
+        backend_status="${{ steps.backend-check.outputs.status }}"
+        
+        if [ "$frontend_status" = "healthy" ] && [ "$backend_status" = "healthy" ]; then
+          echo "All systems operational" > status.txt
+        else
+          echo "System issues detected" > status.txt
+        fi
+
+  # Staging environment monitoring
+  staging-health:
+    name: 🧪 Staging Health Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' && github.event.schedule == '*/15 * * * *'
+    
+    steps:
+    - name: 🩺 Staging Health Check
+      run: |
+        echo "Checking staging environment health..."
+        
+        frontend_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 ${{ env.STAGING_URL }}/health || echo "000")
+        backend_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 ${{ env.STAGING_URL }}/api/health || echo "000")
+        
+        if [ "$frontend_status" = "200" ] && [ "$backend_status" = "200" ]; then
+          echo "✅ Staging environment is healthy"
+        else
+          echo "⚠️ Staging environment issues detected (Frontend: $frontend_status, Backend: $backend_status)"
+        fi
+
+  # Performance monitoring
+  performance-monitoring:
+    name: ⚡ Performance Monitoring
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: ⚡ Performance Test
+      run: |
+        echo "Running performance tests..."
+        
+        # Install lighthouse CLI
+        npm install -g lighthouse
+        
+        # Run lighthouse audit
+        lighthouse ${{ env.PRODUCTION_URL }} \
+          --output json \
+          --output html \
+          --output-path ./lighthouse-report \
+          --chrome-flags="--headless --no-sandbox"
+        
+        # Extract key metrics
+        performance_score=$(cat lighthouse-report.report.json | jq '.categories.performance.score * 100')
+        accessibility_score=$(cat lighthouse-report.report.json | jq '.categories.accessibility.score * 100')
+        best_practices_score=$(cat lighthouse-report.report.json | jq '.categories["best-practices"].score * 100')
+        seo_score=$(cat lighthouse-report.report.json | jq '.categories.seo.score * 100')
+        
+        echo "Performance Score: $performance_score"
+        echo "Accessibility Score: $accessibility_score"
+        echo "Best Practices Score: $best_practices_score"
+        echo "SEO Score: $seo_score"
+
+    - name: 📊 Upload Lighthouse Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: lighthouse-report-${{ github.run_id }}
+        path: |
+          lighthouse-report.report.json
+          lighthouse-report.report.html
+
+    - name: 🚨 Performance Alert
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // Read lighthouse report
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('lighthouse-report.report.json', 'utf8'));
+          
+          const scores = {
+            performance: report.categories.performance.score * 100,
+            accessibility: report.categories.accessibility.score * 100,
+            bestPractices: report.categories['best-practices'].score * 100,
+            seo: report.categories.seo.score * 100
+          };
+          
+          // Check if any score is below threshold
+          const threshold = 80;
+          const lowScores = Object.entries(scores).filter(([key, score]) => score < threshold);
+          
+          if (lowScores.length > 0) {
+            const body = `
+            ## 📊 Performance Alert
+            
+            Some Lighthouse scores are below the ${threshold} threshold:
+            
+            ${lowScores.map(([key, score]) => `- **${key}**: ${score.toFixed(1)}`).join('\n')}
+            
+            **Full Report**: [View Artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '📊 Performance Score Alert',
+              body: body,
+              labels: ['performance', 'monitoring']
+            });
+          }
+
+  # SSL certificate monitoring
+  ssl-monitoring:
+    name: 🔒 SSL Certificate Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔒 Check SSL Certificate
+      run: |
+        echo "Checking SSL certificate for ${{ env.PRODUCTION_URL }}"
+        
+        # Extract domain from URL
+        domain=$(echo ${{ env.PRODUCTION_URL }} | sed 's|https://||' | cut -d'/' -f1)
+        
+        # Check certificate expiry
+        expiry_date=$(echo | openssl s_client -connect $domain:443 -servername $domain 2>/dev/null | openssl x509 -noout -dates | grep notAfter | cut -d= -f2)
+        expiry_timestamp=$(date -d "$expiry_date" +%s)
+        current_timestamp=$(date +%s)
+        days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
+        
+        echo "Certificate expires: $expiry_date"
+        echo "Days until expiry: $days_until_expiry"
+        
+        if [ $days_until_expiry -lt 30 ]; then
+          echo "⚠️ Certificate expires in $days_until_expiry days"
+          echo "certificate_warning=true" >> $GITHUB_ENV
+        else
+          echo "✅ Certificate is valid for $days_until_expiry days"
+          echo "certificate_warning=false" >> $GITHUB_ENV
+        fi
+
+    - name: 🚨 SSL Certificate Alert
+      if: env.certificate_warning == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🔒 SSL Certificate Expiry Warning',
+            body: `
+            ## SSL Certificate Expiry Warning
+            
+            The SSL certificate for **${{ env.PRODUCTION_URL }}** is expiring soon.
+            
+            **Action Required**: 
+            - Check cert-manager status
+            - Verify Let's Encrypt renewal process
+            - Update DNS records if needed
+            
+            **Monitoring Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            `,
+            labels: ['ssl', 'security', 'urgent']
+          });
+
+  # Disk space monitoring
+  resource-monitoring:
+    name: 💾 Resource Monitoring
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: ⚙️ Setup kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.VAST_AI_KUBECONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: 💾 Check Cluster Resources
+      run: |
+        echo "Checking Kubernetes cluster resources..."
+        
+        # Node resources
+        kubectl top nodes || echo "Metrics server not available"
+        
+        # Pod resources
+        kubectl top pods -n automata-app || echo "Pod metrics not available"
+        
+        # Storage usage
+        kubectl get pvc -n automata-app -o json | jq -r '.items[] | "\(.metadata.name): \(.status.capacity.storage)"'
+        
+        # Check for failed pods
+        failed_pods=$(kubectl get pods -n automata-app --field-selector=status.phase!=Running,status.phase!=Succeeded | wc -l)
+        if [ $failed_pods -gt 1 ]; then
+          echo "⚠️ Found $((failed_pods-1)) failed pods"
+          kubectl get pods -n automata-app --field-selector=status.phase!=Running,status.phase!=Succeeded
+        fi

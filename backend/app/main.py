@@ -25,7 +25,7 @@ from .monitoring import (
 from .routers.auth_router import router as auth_router
 from .routers.problems_router import router as problems_router
 from .routers.ai_router import router as ai_router
-from .routers.ai_jflap_router import router as ai_jflap_router
+# from .routers.ai_jflap_router import router as ai_jflap_router # Temporarily disabled
 from .routers.jflap_router import router as jflap_router
 from .routers.learning_router import router as learning_router
 from .routers.verification_router import router as verification_router
@@ -35,6 +35,9 @@ from .routers.langgraph_router import router as langgraph_router
 from .routers.latex_router import router as latex_router
 from .routers.api_platform_router import router as api_platform_router
 from .routers.grading_router import router as grading_router
+
+# Import health check endpoints
+from .health import router as health_router
 
 # Import WebSocket server components
 from .websocket_server import socket_app, init_websocket_server, cleanup_websocket_server
@@ -83,10 +86,11 @@ app.add_middleware(
 )
 
 # Include all routers
+app.include_router(health_router)  # Health checks should be first for monitoring
 app.include_router(auth_router)
 app.include_router(problems_router)
 app.include_router(ai_router)
-app.include_router(ai_jflap_router)
+# app.include_router(ai_jflap_router) # Temporarily disabled due to missing dependencies
 app.include_router(jflap_router)
 app.include_router(learning_router)
 app.include_router(verification_router)

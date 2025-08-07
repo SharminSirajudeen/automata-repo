@@ -1,0 +1,479 @@
+# Istio Service Mesh Configuration for Automata Learning Platform
+# Advanced traffic management, canary deployments, and A/B testing
+
+---
+# Namespace for service mesh resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: automata-mesh
+  labels:
+    istio-injection: enabled
+    name: automata-mesh
+
+---
+# Gateway configuration for external traffic
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: automata-gateway
+  namespace: automata-mesh
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - automata.example.com
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: automata-tls-cert
+    hosts:
+    - automata.example.com
+
+---
+# Virtual Service for main application routing
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: automata-app
+  namespace: automata-mesh
+spec:
+  hosts:
+  - automata.example.com
+  gateways:
+  - automata-gateway
+  http:
+  # Authentication routes - circuit breaker enabled
+  - match:
+    - uri:
+        prefix: /auth/
+    route:
+    - destination:
+        host: automata-auth-service
+        port:
+          number: 8000
+    fault:
+      abort:
+        percentage:
+          value: 0.1
+        httpStatus: 503
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  
+  # AI services - canary deployment with traffic splitting
+  - match:
+    - uri:
+        prefix: /api/ai/
+    - uri:
+        prefix: /api/langgraph/
+    - uri:
+        prefix: /api/learning/
+    route:
+    - destination:
+        host: automata-ai-service
+        port:
+          number: 8000
+        subset: stable
+      weight: 90
+    - destination:
+        host: automata-ai-service
+        port:
+          number: 8000
+        subset: canary
+      weight: 10
+    timeout: 300s
+    retries:
+      attempts: 2
+      perTryTimeout: 150s
+  
+  # WebSocket connections - session affinity
+  - match:
+    - headers:
+        upgrade:
+          exact: websocket
+    route:
+    - destination:
+        host: automata-websocket-service
+        port:
+          number: 8000
+    timeout: 86400s
+  
+  # A/B testing for new features
+  - match:
+    - uri:
+        prefix: /api/problems/
+    - headers:
+        x-ab-test:
+          exact: "version-b"
+    route:
+    - destination:
+        host: automata-api-service
+        port:
+          number: 8000
+        subset: version-b
+  
+  # Default API routes
+  - match:
+    - uri:
+        prefix: /api/
+    route:
+    - destination:
+        host: automata-api-service
+        port:
+          number: 8000
+        subset: stable
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    timeout: 60s
+    retries:
+      attempts: 3
+      perTryTimeout: 20s
+  
+  # Health checks - no retries, fast failure
+  - match:
+    - uri:
+        prefix: /health
+    route:
+    - destination:
+        host: automata-api-service
+        port:
+          number: 8000
+    timeout: 10s
+  
+  # Default route
+  - route:
+    - destination:
+        host: automata-api-service
+        port:
+          number: 8000
+        subset: stable
+
+---
+# Destination Rules for traffic policies
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: automata-api-service
+  namespace: automata-mesh
+spec:
+  host: automata-api-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+        keepAlive:
+          time: 7200s
+          interval: 30s
+      http:
+        http1MaxPendingRequests: 64
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayErrors: 3
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+        minHealthPercent: 50
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      consecutiveGatewayErrors: 3
+      consecutive5xxErrors: 3
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  subsets:
+  - name: stable
+    labels:
+      version: stable
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 100
+        http:
+          http1MaxPendingRequests: 32
+          maxRequestsPerConnection: 10
+  - name: version-b
+    labels:
+      version: v2
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 50
+        http:
+          http1MaxPendingRequests: 16
+
+---
+# AI Service Destination Rules with canary support
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: automata-ai-service
+  namespace: automata-mesh
+spec:
+  host: automata-ai-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 50
+        connectTimeout: 60s
+      http:
+        http1MaxPendingRequests: 32
+        maxRequestsPerConnection: 5
+        maxRetries: 2
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      consecutiveGatewayErrors: 2
+      interval: 60s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 30
+  subsets:
+  - name: stable
+    labels:
+      version: stable
+  - name: canary
+    labels:
+      version: canary
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 20
+        http:
+          http1MaxPendingRequests: 10
+
+---
+# WebSocket Service Destination Rules
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: automata-websocket-service
+  namespace: automata-mesh
+spec:
+  host: automata-websocket-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 30s
+        keepAlive:
+          time: 86400s
+      http:
+        http1MaxPendingRequests: 100
+        maxRequestsPerConnection: 1000
+    loadBalancer:
+      consistentHash:
+        httpHeaderName: "X-Real-IP"
+    outlierDetection:
+      consecutiveGatewayErrors: 2
+      interval: 10s
+      baseEjectionTime: 10s
+      maxEjectionPercent: 25
+
+---
+# Auth Service Destination Rules
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: automata-auth-service
+  namespace: automata-mesh
+spec:
+  host: automata-auth-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        maxRequestsPerConnection: 20
+    loadBalancer:
+      simple: ROUND_ROBIN
+    outlierDetection:
+      consecutiveGatewayErrors: 2
+      interval: 30s
+      baseEjectionTime: 30s
+
+---
+# Service Entry for external dependencies
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-ai-services
+  namespace: automata-mesh
+spec:
+  hosts:
+  - api.openai.com
+  - api.anthropic.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+# Authorization Policy for security
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: automata-authz
+  namespace: automata-mesh
+spec:
+  selector:
+    matchLabels:
+      app: automata-backend
+  rules:
+  # Allow health checks
+  - to:
+    - operation:
+        paths: ["/health*", "/healthz"]
+  # Allow public API access
+  - to:
+    - operation:
+        paths: ["/api/*"]
+    when:
+    - key: request.headers[user-agent]
+      notValues: ["*bot*", "*crawl*"]
+  # Restrict admin endpoints
+  - to:
+    - operation:
+        paths: ["/metrics", "/admin/*"]
+    when:
+    - key: source.ip
+      values: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+
+---
+# Request Authentication for JWT validation
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: automata-jwt
+  namespace: automata-mesh
+spec:
+  selector:
+    matchLabels:
+      app: automata-backend
+  jwtRules:
+  - issuer: "https://automata.example.com"
+    jwksUri: "https://automata.example.com/.well-known/jwks.json"
+    audiences:
+    - "automata-api"
+    forwardOriginalToken: true
+
+---
+# Peer Authentication for mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: automata-mtls
+  namespace: automata-mesh
+spec:
+  selector:
+    matchLabels:
+      app: automata-backend
+  mtls:
+    mode: STRICT
+
+---
+# Telemetry configuration
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: automata-metrics
+  namespace: automata-mesh
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        destination_service_name:
+          operation: UPSERT
+          value: "automata-backend"
+    - match:
+        metric: REQUEST_COUNT
+      disabled: false
+    - match:
+        metric: REQUEST_DURATION
+      disabled: false
+    - match:
+        metric: TCP_OPENED_CONNECTIONS
+      disabled: false
+
+---
+# Envoy Filter for advanced configuration
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: automata-rate-limit
+  namespace: automata-mesh
+spec:
+  workloadSelector:
+    labels:
+      app: automata-backend
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: local_rate_limiter
+            token_bucket:
+              max_tokens: 100
+              tokens_per_fill: 100
+              fill_interval: 60s
+            filter_enabled:
+              runtime_key: local_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: local_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+
+---
+# Distributed tracing configuration
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: automata-tracing
+  namespace: automata-mesh
+spec:
+  tracing:
+  - providers:
+    - name: jaeger
+  accessLogging:
+  - providers:
+    - name: otel

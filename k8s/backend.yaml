@@ -67,9 +67,9 @@ spec:
             secretKeyRef:
               name: automata-secrets
               key: DATABASE_URL
-        # Redis configuration
-        - name: REDIS_URL
-          value: "redis://redis-service:6379"
+        # Valkey configuration
+        - name: VALKEY_URL
+          value: "valkey://valkey-service:6379"
         # Application configuration
         - name: SECRET_KEY
           valueFrom:

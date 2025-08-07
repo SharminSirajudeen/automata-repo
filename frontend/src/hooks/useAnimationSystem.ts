@@ -97,9 +97,11 @@ export const useAnimationSystem = ({
     skipCount: 0
   });
 
-  // Refs
+  // Refs for cleanup
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const stepTimestamps = useRef<number[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
+  const isUnmountedRef = useRef(false);
 
   // Animation springs
   const progressSpring = useSpring({
@@ -115,14 +117,18 @@ export const useAnimationSystem = ({
   // Computed values
   const isComplete = currentStep >= simulationSteps.length - 1;
 
-  // Emit animation events
+  // Emit animation events with safety check
   const emitEvent = useCallback((event: AnimationEvent) => {
-    onAnimationEvent?.(event);
+    if (!isUnmountedRef.current) {
+      onAnimationEvent?.(event);
+    }
   }, [onAnimationEvent]);
 
-  // Update metrics
+  // Update metrics with safety check
   const updateMetrics = useCallback((updates: Partial<AnimationMetrics>) => {
-    setMetrics(prev => ({ ...prev, ...updates }));
+    if (!isUnmountedRef.current) {
+      setMetrics(prev => ({ ...prev, ...updates }));
+    }
   }, []);
 
   // Control functions
@@ -170,16 +176,25 @@ export const useAnimationSystem = ({
   }, [currentStep, metrics.userInteractions, emitEvent, updateMetrics]);
 
   const reset = useCallback(() => {
-    setCurrentStep(0);
-    setIsPlaying(false);
-    setIsPaused(false);
-    setStartTime(null);
-    stepTimestamps.current = [];
+    if (isUnmountedRef.current) return;
     
+    // Clear all timers and animations
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    setCurrentStep(0);
+    setIsPlaying(false);
+    setIsPaused(false);
+    setStartTime(null);
+    
+    // Clear timestamps array instead of reassigning
+    stepTimestamps.current.length = 0;
     
     onStepChange?.(0);
     emitEvent({ type: 'reset', timestamp: Date.now() });
@@ -191,10 +206,16 @@ export const useAnimationSystem = ({
   }, [onStepChange, metrics.userInteractions, emitEvent, updateMetrics]);
 
   const stepForward = useCallback(() => {
+    if (isUnmountedRef.current) return;
+    
     if (currentStep < simulationSteps.length - 1) {
       const newStep = currentStep + 1;
       setCurrentStep(newStep);
-      stepTimestamps.current[newStep] = Date.now();
+      
+      // Prevent unbounded array growth
+      if (stepTimestamps.current.length < 1000) {
+        stepTimestamps.current[newStep] = Date.now();
+      }
       
       onStepChange?.(newStep);
       emitEvent({ type: 'step', timestamp: Date.now(), step: newStep });
@@ -204,9 +225,11 @@ export const useAnimationSystem = ({
         completionRate: (newStep / (simulationSteps.length - 1)) * 100,
         userInteractions: metrics.userInteractions + 1 
       });
-    } else if (animationSettings.loop) {
+    } else if (animationSettings.loop && !isUnmountedRef.current) {
       reset();
-      play();
+      if (!isUnmountedRef.current) {
+        play();
+      }
     }
   }, [currentStep, simulationSteps.length, animationSettings.loop, onStepChange, metrics.userInteractions, emitEvent, updateMetrics, reset, play]);
 
@@ -271,26 +294,31 @@ export const useAnimationSystem = ({
   }, [simulationSteps.length, currentStep, metrics.averageStepDuration, animationConfig.duration, animationSettings.animationSpeed]);
 
   const exportMetrics = useCallback(() => {
+    if (isUnmountedRef.current) return metrics;
+    
     const now = Date.now();
     const totalTime = startTime ? now - startTime.getTime() : 0;
-    const averageDuration = stepTimestamps.current.length > 1 
-      ? (stepTimestamps.current[stepTimestamps.current.length - 1] - stepTimestamps.current[0]) / (stepTimestamps.current.length - 1)
+    const validTimestamps = stepTimestamps.current.filter(t => t > 0);
+    const averageDuration = validTimestamps.length > 1 
+      ? (validTimestamps[validTimestamps.length - 1] - validTimestamps[0]) / (validTimestamps.length - 1)
       : 0;
 
     return {
       ...metrics,
       totalAnimationTime: totalTime,
-      averageStepDuration: averageDuration
+      averageStepDuration: Math.max(0, averageDuration)
     };
   }, [metrics, startTime]);
 
-  // Auto-play effect
+  // Auto-play effect with proper cleanup
   useEffect(() => {
-    if (isPlaying && !isComplete) {
-      const effectiveDuration = animationConfig.duration / animationSettings.animationSpeed;
+    if (isPlaying && !isComplete && !isUnmountedRef.current) {
+      const effectiveDuration = Math.max(100, animationConfig.duration / animationSettings.animationSpeed);
       
       intervalRef.current = setInterval(() => {
-        stepForward();
+        if (!isUnmountedRef.current) {
+          stepForward();
+        }
       }, effectiveDuration);
 
       return () => {
@@ -313,9 +341,20 @@ export const useAnimationSystem = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isUnmountedRef.current = true;
+      
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      
+      // Clear arrays to prevent memory leaks
+      stepTimestamps.current.length = 0;
     };
   }, []);
 

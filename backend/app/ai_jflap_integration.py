@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 # Import orchestrator and AI components
 from .orchestrator import ModelOrchestrator, ExecutionMode
 from .agents import AutomataGenerator, AutomataExplainer
-from .prompts import PromptTemplates
+from .prompts import PromptTemplate
 
 
 class AIJFLAPFeature(Enum):
@@ -1071,3 +1071,6 @@ class AIJFLAPIntegration:
 
 # Export main class
 __all__ = ['AIJFLAPIntegration', 'AIJFLAPFeature', 'AIResponse']
+
+# Global instance for easy import
+ai_jflap = AIJFLAPIntegration()

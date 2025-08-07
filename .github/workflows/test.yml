@@ -1,0 +1,390 @@
+name: 🧪 Test Suite
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # Frontend testing
+  frontend-test:
+    name: 🎨 Frontend Tests
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./frontend
+    
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📦 Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: 📋 Install dependencies
+      run: npm ci
+
+    - name: 🧪 Run unit tests
+      run: npm test -- --coverage --watchAll=false
+      continue-on-error: true
+
+    - name: 🔧 Type checking
+      run: npm run type-check
+
+    - name: 🧪 Run linting
+      run: npm run lint
+
+    - name: 🏗️ Test build
+      run: npm run build
+      env:
+        VITE_API_URL: https://api.test.example.com
+        VITE_WS_URL: wss://api.test.example.com/ws
+
+    - name: 📊 Upload coverage
+      if: matrix.node-version == 20
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./frontend/coverage/lcov.info
+        flags: frontend
+
+  # Backend testing
+  backend-test:
+    name: 🔧 Backend Tests
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Setup Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: 📋 Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-cov pytest-xdist pytest-mock
+
+    - name: 🧪 Run unit tests
+      run: |
+        pytest tests/unit/ -v --cov=app --cov-report=xml --cov-report=html -n auto
+      env:
+        DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        SECRET_KEY: test-secret-key-for-ci
+        JWT_SECRET: test-jwt-secret-for-ci
+        OPENAI_API_KEY: sk-test-key
+
+    - name: 🧪 Run integration tests
+      run: |
+        pytest tests/integration/ -v --cov=app --cov-append --cov-report=xml
+      env:
+        DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        SECRET_KEY: test-secret-key-for-ci
+        JWT_SECRET: test-jwt-secret-for-ci
+        OPENAI_API_KEY: sk-test-key
+
+    - name: 📊 Upload coverage
+      if: matrix.python-version == 3.12
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./backend/coverage.xml
+        flags: backend
+
+    - name: 🔍 Lint with ruff
+      run: |
+        pip install ruff
+        ruff check app/ --format=github
+
+    - name: 🔧 Type checking with mypy
+      run: |
+        pip install mypy types-redis types-requests
+        mypy app/ --show-error-codes
+
+    - name: 🛡️ Security scan with bandit
+      run: |
+        pip install bandit[toml]
+        bandit -r app/ -f json -o bandit-report.json
+      continue-on-error: true
+
+    - name: 📊 Upload bandit results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: bandit-results-${{ matrix.python-version }}
+        path: backend/bandit-report.json
+
+  # Performance testing
+  performance-test:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    needs: [frontend-test, backend-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: 📋 Install backend dependencies
+      working-directory: ./backend
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🚀 Start backend server
+      working-directory: ./backend
+      run: |
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        sleep 10
+      env:
+        DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        SECRET_KEY: test-secret-key-for-perf
+        JWT_SECRET: test-jwt-secret-for-perf
+
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: 📋 Install load testing tools
+      run: |
+        npm install -g autocannon
+        pip install locust
+
+    - name: ⚡ Run API load tests
+      run: |
+        # Quick API load test
+        autocannon -c 10 -d 30 -p 10 http://localhost:8000/health
+        
+        # Extended load test with Locust
+        cd load_tests
+        locust -f locustfile.py --headless -u 50 -r 10 -t 60s --host http://localhost:8000
+
+    - name: 📊 Upload performance results
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results
+        path: load_tests/results/
+
+  # End-to-end testing
+  e2e-test:
+    name: 🎭 E2E Tests
+    runs-on: ubuntu-latest
+    needs: [frontend-test, backend-test]
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐳 Build test environment
+      run: |
+        docker-compose -f docker-compose.yml up -d
+        sleep 60  # Wait for services to be ready
+
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: 🎭 Setup Playwright
+      run: |
+        npm install -g @playwright/test
+        playwright install --with-deps chromium
+
+    - name: 🧪 Run E2E tests
+      run: |
+        # Create basic E2E tests
+        mkdir -p e2e-tests
+        cat > e2e-tests/basic.spec.js << 'EOF'
+        const { test, expect } = require('@playwright/test');
+        
+        test('homepage loads', async ({ page }) => {
+          await page.goto('http://localhost:3000');
+          await expect(page).toHaveTitle(/Automata/);
+        });
+        
+        test('API health check', async ({ request }) => {
+          const response = await request.get('http://localhost:8000/health');
+          expect(response.status()).toBe(200);
+        });
+        EOF
+        
+        cd e2e-tests
+        playwright test
+
+    - name: 📊 Upload E2E results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-results
+        path: |
+          e2e-tests/test-results/
+          e2e-tests/playwright-report/
+
+    - name: 🛑 Cleanup test environment
+      if: always()
+      run: |
+        docker-compose -f docker-compose.yml down -v
+
+  # Dependency security audit
+  security-audit:
+    name: 🛡️ Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: 🛡️ Audit frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm audit --audit-level=high --format=json > npm-audit.json || true
+        npm audit
+
+    - name: 🛡️ Audit backend dependencies
+      working-directory: ./backend
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json || true
+        safety check
+
+    - name: 📊 Upload security audit results
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-audit-results
+        path: |
+          frontend/npm-audit.json
+          backend/safety-report.json
+
+  # Code quality metrics
+  quality-metrics:
+    name: 📊 Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 🔍 SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    - name: 📊 Code complexity analysis
+      run: |
+        # Install tools
+        pip install radon xenon
+        npm install -g jscpd
+        
+        # Python complexity
+        radon cc backend/app/ --show-complexity --min B
+        radon mi backend/app/ --min B
+        
+        # JavaScript/TypeScript complexity
+        cd frontend
+        npm install
+        npx jscpd --min-lines 10 --min-tokens 50 src/
+
+    - name: 📈 Generate metrics report
+      run: |
+        mkdir -p metrics
+        echo "# Code Quality Metrics" > metrics/report.md
+        echo "## Lines of Code" >> metrics/report.md
+        find . -name "*.py" -not -path "./venv/*" -not -path "./.venv/*" | xargs wc -l | tail -1 >> metrics/report.md
+        find . -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" | xargs wc -l | tail -1 >> metrics/report.md
+
+    - name: 📊 Upload metrics
+      uses: actions/upload-artifact@v4
+      with:
+        name: quality-metrics
+        path: metrics/

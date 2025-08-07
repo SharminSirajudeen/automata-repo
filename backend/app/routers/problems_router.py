@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from ..database import Problem, Solution, save_solution, User
 from ..agents import AutomataExplainer
 from ..auth import get_current_active_user
-from ..validators import ValidationResult
+from ..validators import ValidationResult, SolutionCreate
 from pydantic import BaseModel
 import logging
 
@@ -183,7 +183,7 @@ async def get_problem(problem_id: str):
 
 
 @router.post("/{problem_id}/validate")
-async def validate_solution(problem_id: str, solution: Solution):
+async def validate_solution(problem_id: str, solution: SolutionCreate):
     """Validate a solution against a problem"""
     if problem_id not in problems_db:
         raise HTTPException(status_code=404, detail="Problem not found")
@@ -277,7 +277,7 @@ async def generate_solution(problem_id: str):
 
 
 @router.post("/{problem_id}/explain-solution")
-async def explain_solution(problem_id: str, solution: Solution):
+async def explain_solution(problem_id: str, solution: SolutionCreate):
     """Explain a solution step by step"""
     if problem_id not in problems_db:
         raise HTTPException(status_code=404, detail="Problem not found")

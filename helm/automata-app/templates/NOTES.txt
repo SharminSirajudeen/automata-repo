@@ -41,9 +41,9 @@
 {{- end }}
 
 6. Redis access:
-{{- if .Values.redis.enabled }}
-   kubectl port-forward svc/{{ include "automata-app.fullname" . }}-redis-master 6379:6379 -n {{ include "automata-app.namespace" . }}
-   # Connect using: redis-cli -h localhost -p 6379
+{{- if .Values.valkey.enabled }}
+   kubectl port-forward svc/{{ include "automata-app.fullname" . }}-valkey-master 6379:6379 -n {{ include "automata-app.namespace" . }}
+   # Connect using: valkey-cli -h localhost -p 6379
 {{- end }}
 
 {{- if not .Values.ingress.enabled }}
